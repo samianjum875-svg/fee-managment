@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ request.tenant.name }} | Control Center</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #0b1329; color: #f1f5f9; margin: 0; padding: 20px; }
+        .container { max-width: 1000px; margin: 40px auto; background: #1c2541; padding: 30px; border-radius: 12px; border: 1px solid #3a506b; }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #3a506b; padding-bottom: 20px; }
+        h1 { color: #4cc9f0; margin: 0; }
+        .badge { background: #3a506b; padding: 6px 12px; border-radius: 20px; font-size: 0.85em; color: #6fffe9; font-family: monospace; }
+        .action-bar { margin: 30px 0; display: flex; gap: 15px; }
+        .btn { padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold; color: #0b1329; background: #6fffe9; display: inline-block; }
+        .btn-alt { background: transparent; color: #6fffe9; border: 1px solid #6fffe9; }
+        .student-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        .student-table th, .student-table td { padding: 12px; text-align: left; border-bottom: 1px solid #3a506b; }
+        .student-table th { background: #0b1329; color: #4cc9f0; }
+        .logout-link { color: #ef4444; text-decoration: none; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>{{ request.tenant.name }} Dashboard</h1>
+                <p style="color: #8da2bb; margin: 5px 0 0 0;">AXIS Node Environment</p>
+            </div>
+            <span class="badge">Isolated Schema: {{ request.tenant.schema_name }}</span>
+        </div>
+
+        <div class="action-bar">
+            <a href="{% url 'add_student' %}" class="btn">➕ Add New Student Instance</a>
+            <a href="/admin/" class="btn btn-alt" target="_blank">Django Admin Backend Terminal</a>
+            <a href="{% url 'school_logout' %}" class="logout-link">Secure Exit (Logout)</a>
+        </div>
+
+        <h3>Active Registered Student Core Roster</h3>
+        <table class="student-table">
+            <thead>
+                <tr>
+                    <th>Roll Number Reference</th>
+                    <th>Full Legal Name</th>
+                    <th>Assigned Grade Class</th>
+                    <th>Date Inducted</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for student in students %}
+                <tr>
+                    <td style="color: #6fffe9; font-family: monospace;">#{{ student.roll_number }}</td>
+                    <td><strong>{{ student.name }}</strong></td>
+                    <td>Class {{ student.grade }}</td>
+                    <td>{{ student.enrolled_on|date:"Y-m-d" }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4" style="text-align: center; color: #8da2bb; padding: 30px;">No students mapped to this node yet. Use the registration wizard to create profiles.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>
