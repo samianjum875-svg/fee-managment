@@ -86,7 +86,14 @@ TENANT_APPS = [
     'django.contrib.staticfiles',
 ]
 
-INSTALLED_APPS = list(set(SHARED_APPS + TENANT_APPS))
+# STRICT ORDERING: django_tenants MUST be at the top to hijack auth queries!
+INSTALLED_APPS = []
+for app in SHARED_APPS:
+    if app not in INSTALLED_APPS:
+        INSTALLED_APPS.append(app)
+for app in TENANT_APPS:
+    if app not in INSTALLED_APPS:
+        INSTALLED_APPS.append(app)
 
 TENANT_MODEL = 'axis_saas.SchoolClient'
 TENANT_DOMAIN_MODEL = 'axis_saas.SchoolDomain'

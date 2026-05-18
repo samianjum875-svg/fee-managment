@@ -26,3 +26,23 @@ def provision_secure_tenant_admin(sender, tenant, **kwargs):
                 password=u_pass
             )
             print(f"🚀 [DYNAMIC SYNC] Operational superuser '{u_name}' provisioned into tenant schema '{tenant.schema_name}' successfully.")
+
+from django.db.models.signals import post_save
+from axis_saas.models import SchoolClient
+
+@receiver(post_save, sender=SchoolClient)
+def sync_tenant_admin_password(sender, instance, created, **kwargs):
+    if instance.schema_name == 'public' or created:
+        return
+        
+    u_name = instance.admin_username
+    u_pass = instance.admin_password
+    
+    if u_name and u_pass:
+        with schema_context(instance.schema_name):
+            User = get_user_model()
+            user = User.objects.filter(username=u_name).first()
+            if user:
+                user.set_password(u_pass)
+                user.save()
+                print(f"🔄 [AXIS AUTH] Password safely synchronized for '{u_name}' in schema '{instance.schema_name}'.")

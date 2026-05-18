@@ -4,6 +4,31 @@ from django import forms
 from django.utils.safestring import mark_safe
 from .models import SchoolClient
 
+
+class TenantOnlyAdminMixin:
+    def has_module_permission(self, request):
+        return request.tenant.schema_name != 'public'
+    def has_view_permission(self, request, obj=None):
+        return request.tenant.schema_name != 'public'
+    def has_add_permission(self, request):
+        return request.tenant.schema_name != 'public'
+    def has_change_permission(self, request, obj=None):
+        return request.tenant.schema_name != 'public'
+    def has_delete_permission(self, request, obj=None):
+        return request.tenant.schema_name != 'public'
+
+class PublicOnlyAdminMixin:
+    def has_module_permission(self, request):
+        return request.tenant.schema_name == 'public'
+    def has_view_permission(self, request, obj=None):
+        return request.tenant.schema_name == 'public'
+    def has_add_permission(self, request):
+        return request.tenant.schema_name == 'public'
+    def has_change_permission(self, request, obj=None):
+        return request.tenant.schema_name == 'public'
+    def has_delete_permission(self, request, obj=None):
+        return request.tenant.schema_name == 'public'
+
 class SchoolClientForm(forms.ModelForm):
     class Meta:
         model = SchoolClient
