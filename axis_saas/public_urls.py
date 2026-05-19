@@ -43,8 +43,12 @@ def resolve_tenant_host(request):
         if tenant:
             return tenant
 
-        domain_record = SchoolDomain.objects.filter(domain__iexact=host).select_related('tenant').first()
-        if domain_record and domain_record.tenant.is_active:
+        tenant = SchoolClient.objects.filter(name__iexact=schema_candidate, is_active=True).first()
+        if tenant:
+            return tenant
+
+        domain_record = SchoolDomain.objects.filter(domain__iexact=host, tenant__is_active=True).select_related('tenant').first()
+        if domain_record:
             return domain_record.tenant
 
     return None
