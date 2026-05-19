@@ -67,21 +67,6 @@ class Student(models.Model):
     
     enrolled_on = models.DateTimeField(auto_now_add=True)
 
-    def save(self, *args, **kwargs):
-        if not self.roll_number or self.roll_number == "TEMP_TOKEN":
-            # Safely fetch the last assigned sequential index within this specific tenant
-            last_student = Student.objects.all().order_by('id').last()
-            if last_student and last_student.roll_number and last_student.roll_number.startswith("AXIS-"):
-                try:
-                    last_sequence = int(last_student.roll_number.split("-")[1])
-                    next_sequence = last_sequence + 1
-                except (ValueError, IndexError):
-                    next_sequence = 10001
-            else:
-                next_sequence = 10001
-            
-            self.roll_number = f"AXIS-{next_sequence}"
-        super().save(*args, **kwargs)
 
     def save(self, *args, **kwargs):
         if not self.roll_number or self.roll_number == "TEMP_TOKEN":

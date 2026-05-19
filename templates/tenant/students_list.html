@@ -1,0 +1,47 @@
+{% extends 'tenant/base.html' %}
+
+{% block title %}{{ tenant.name }} | Students{% endblock %}
+
+{% block sidebar_meta %}Student Roster{% endblock %}
+{% block nav_students_active %}active{% endblock %}
+
+{% block body %}
+<div class="page-head" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 16px; margin-bottom: 20px;">
+    <div>
+        <h1 class="page-title">Students</h1>
+        <p class="page-description">Manage student enrollments and records securely.</p>
+    </div>
+    <div class="field-card" style="margin: 0;">
+        <button style="background: var(--primary); color: #fff; padding: 10px 16px; border-radius: 6px; font-weight: 600; cursor: pointer;">+ Add Student</button>
+    </div>
+</div>
+
+<div class="page-card" style="padding: 0; overflow: hidden;">
+    <table style="width: 100%; border-collapse: collapse; text-align: left;">
+        <thead style="background: var(--surface-alt); border-bottom: 1px solid var(--border);">
+            <tr>
+                <th style="padding: 16px; font-size: 0.85rem; color: var(--muted); text-transform: uppercase;">Roll No</th>
+                <th style="padding: 16px; font-size: 0.85rem; color: var(--muted); text-transform: uppercase;">Name</th>
+                <th style="padding: 16px; font-size: 0.85rem; color: var(--muted); text-transform: uppercase;">Grade</th>
+                <th style="padding: 16px; font-size: 0.85rem; color: var(--muted); text-transform: uppercase;">Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for student in students %}
+            <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 16px; font-size: 0.9rem; font-weight: 600;">{{ student.roll_number|default:"N/A" }}</td>
+                <td style="padding: 16px; font-size: 0.9rem;">{{ student.name }}</td>
+                <td style="padding: 16px; font-size: 0.9rem;">{{ student.grade }}</td>
+                <td style="padding: 16px; font-size: 0.9rem;">
+                    <span style="background: #e6f4ea; color: #137333; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Active</span>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="4" style="padding: 32px; text-align: center; color: var(--muted); font-size: 0.95rem;">No students enrolled yet.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

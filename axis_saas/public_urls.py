@@ -131,7 +131,31 @@ def school_settings(request, schema_name):
         'logo_url': logo_url,
     })
 
+
+def school_students_list(request, schema_name):
+    tenant = get_school_tenant(schema_name)
+    if not tenant:
+        return HttpResponseNotFound('School portal not found.')
+
+    if request.session.get('school_admin_authenticated') is not True or request.session.get('school_admin_schema') != tenant.schema_name:
+        return redirect(f'/portal/{tenant.schema_name}/login/')
+
+    logo_url = tenant.school_logo.url if tenant.school_logo else None
+    
+    try:
+        from axis_saas.models import Student
+        students = Student.objects.all().order_by('-id')
+    except ImportError:
+        students = []
+
+    return render(request, 'tenant/students_list.html', {
+        'tenant': tenant,
+        'logo_url': logo_url,
+        'students': students,
+    })
+
 urlpatterns = [
+    path('portal/<slug:schema_name>/students/', school_students_list, name='school_portal_students'),
     path('', saas_homepage, name='saas_home'),
     path('admin/', admin.site.urls),
     path('portal/<slug:schema_name>/', school_dashboard, name='school_portal'),
