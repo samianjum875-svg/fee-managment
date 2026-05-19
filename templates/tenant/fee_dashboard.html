@@ -1,0 +1,71 @@
+{% extends 'tenant/base.html' %}
+
+{% block title %}{{ tenant.name }} | Fee Matrix Settings{% endblock %}
+
+{% block sidebar_meta %}Financial Matrix{% endblock %}
+{% block fees_active %}active-route{% endblock %}
+
+{% block content %}
+<div class="page-card">
+    <div class="page-head">
+        <div>
+            <h1 class="page-title">Fee Structure Management</h1>
+            <p class="page-description">Configure the tuition asset brackets matrix across student grade nodes.</p>
+        </div>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="message-success">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+
+    <div style="display: grid; gap: 24px; grid-template-columns: 1fr 2fr; margin-top: 20px;">
+        <!-- Left Column: Form Configuration -->
+        <div class="form-card" style="margin-top: 0; height: max-content;">
+            <h3>Update Fee Brackets</h3>
+            <form method="post">
+                {% csrf_token %}
+                <div class="field-card">
+                    <label for="{{ form.grade.id_for_label }}">Class Grade Node</label>
+                    {{ form.grade }}
+                </div>
+                <div class="field-card">
+                    <label for="{{ form.monthly_fee.id_for_label }}">Monthly Premium Rate (RS)</label>
+                    {{ form.monthly_fee }}
+                </div>
+                <div class="field-card" style="margin-top: 16px;">
+                    <button type="submit" style="width: 100%;">Save Fee Bracket</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Right Column: Current Real-time Ledgers -->
+        <div class="form-card" style="margin-top: 0;">
+            <h3>Active Target Fee Ledger Profiles</h3>
+            <div style="overflow-x: auto; margin-top: 12px;">
+                <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid var(--border); color: var(--muted);">
+                            <th style="padding: 10px 8px; font-weight: 600;">Grade Level</th>
+                            <th style="padding: 10px 8px; font-weight: 600;">Monthly Standard Fee</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for structure in fee_structures %}
+                            <tr style="border-bottom: 1px solid var(--border);">
+                                <td style="padding: 12px 8px; font-weight: 600; color: var(--text);">Class {{ structure.grade }}</td>
+                                <td style="padding: 12px 8px; color: var(--primary); font-weight: 600;">RS {{ structure.monthly_fee }}</td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="2" style="padding: 20px; text-align: center; color: var(--muted);">No active fee parameters configured yet.</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

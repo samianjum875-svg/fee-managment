@@ -1,0 +1,36 @@
+{% extends 'tenant/base.html' %}
+
+{% block title %}{{ tenant.name }} | Fee System{% endblock %}
+
+{% block fees_active %}active-route{% endblock %}
+
+{% block content %}
+<div class="page-card">
+    <div class="page-head">
+        <div>
+            <h1 class="page-title">Fee Management System</h1>
+            <p class="page-description">Track ledger billing, collect allocations, and process invoice configurations.</p>
+        </div>
+    </div>
+
+    <div class="grid-3">
+        <div class="stat-card">
+            <span class="stat-label">Total Collected</span>
+            <p class="stat-value">Rs. 0</p>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">Pending Invoices</span>
+            <p class="stat-value">0</p>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">Defaulter Count</span>
+            <p class="stat-value">0</p>
+        </div>
+    </div>
+
+    <div class="form-card">
+        <h3>Fee Structure Context</h3>
+        <p class="form-note">The core engine handles automated billing pipelines. Full transactional tables and record outputs can be mapped directly into this node view.</p>
+    </div>
+</div>
+{% endblock %}
