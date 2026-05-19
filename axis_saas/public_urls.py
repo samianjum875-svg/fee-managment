@@ -5,7 +5,7 @@ from django.shortcuts import redirect
 from django_tenants.utils import schema_context
 from django.contrib.auth import views as auth_views
 
-from axis_saas.models import SchoolClient
+from axis_saas.models import SchoolClient, SchoolDomain
 from axis_saas.tenant_views import tenant_dashboard, add_student_instance, fee_management_dashboard
 
 
@@ -33,10 +33,20 @@ def public_root(request):
 
 
 def resolve_tenant_host(request):
-    host = request.get_host().split(':')[0]
-    if host != 'localhost' and host.endswith('.localhost'):
-        schema_name = host.split('.')[0]
-        return SchoolClient.objects.filter(schema_name=schema_name, is_active=True).first()
+    host = request.get_host().split(':')[0].lower()
+    if host == 'localhost':
+        return None
+
+    if host.endswith('.localhost'):
+        schema_candidate = host.split('.')[0]
+        tenant = SchoolClient.objects.filter(schema_name__iexact=schema_candidate, is_active=True).first()
+        if tenant:
+            return tenant
+
+        domain_record = SchoolDomain.objects.filter(domain__iexact=host).select_related('tenant').first()
+        if domain_record and domain_record.tenant.is_active:
+            return domain_record.tenant
+
     return None
 
 
