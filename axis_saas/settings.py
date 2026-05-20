@@ -15,11 +15,11 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django_tenants.middleware.main.TenantMainMiddleware',
+    'axis_saas.middleware.PublicSchemaMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     # ANTI-EXPLOIT SHIELD: Absolute protection against concurrent sessions, session bleeding, and back-button caching
-    'axis_saas.settings.CrossTenantSessionIsolationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -114,7 +114,8 @@ DATABASE_ROUTERS = (
 # ==============================================================================
 SESSION_COOKIE_DOMAIN = None
 CSRF_COOKIE_DOMAIN = None
-SESSION_SAVE_EVERY_REQUEST = True
+SESSION_ENGINE = 'django.contrib.sessions.backends.file'
+SESSION_SAVE_EVERY_REQUEST = False
 
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:8000',
@@ -137,28 +138,8 @@ X_FRAME_OPTIONS = 'DENY'
 from django.contrib.auth import logout
 from django.utils.deprecation import MiddlewareMixin
 
-class CrossTenantSessionIsolationMiddleware(MiddlewareMixin):
-    def process_request(self, request):
-        if hasattr(request, 'user') and request.user.is_authenticated:
-            current_schema = getattr(request, 'tenant', None)
-            current_schema_name = current_schema.schema_name if current_schema else 'public'
-            
-            session_schema = request.session.get('_auth_tenant_schema_token')
-            session_user_id = request.session.get('_auth_user_id')
-            
-            # Cross-Tenant Conflict Detection Engine
-            if session_schema is None:
-                request.session['_auth_tenant_schema_token'] = current_schema_name
-                request.session['_auth_active_user_fingerprint'] = f"{current_schema_name}_{session_user_id}"
-            elif session_schema != current_schema_name:
-                # Boom! User tried to open another tenant dashboard in the same browser session.
-                # Flush everything to protect the application boundaries.
-                logout(request)
-                request.session.flush()
-                
-    def process_response(self, request, response):
-        # Explicit Cache Destruction Matrix - Prevents Back Button Exploits after logout
-        response['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
-        response['Pragma'] = 'no-cache'
-        response['Expires'] = '0'
-        return response
+
+
+SESSION_COOKIE_PATH = '/'
+
+SESSION_FILE_PATH = '/tmp/django_sessions/'

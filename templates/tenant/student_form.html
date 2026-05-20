@@ -1,0 +1,39 @@
+{% extends 'tenant/base.html' %}
+
+{% block title %}{{ tenant.name }} | Add Student{% endblock %}
+
+{% block sidebar_meta %}Add Student{% endblock %}
+{% block nav_students_active %}active{% endblock %}
+
+{% block body %}
+<div class="page-card">
+    <div class="page-head">
+        <div>
+            <h1 class="page-title">Add New Student</h1>
+            <p class="page-description">Fill out the enrollment form below.</p>
+        </div>
+    </div>
+
+    <div class="form-card">
+        <form method="post">
+            {% csrf_token %}
+            {% for field in form %}
+                <div class="field-card">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.help_text %}
+                        <small style="color: var(--muted); font-size: 0.7rem;">{{ field.help_text }}</small>
+                    {% endif %}
+                    {% for error in field.errors %}
+                        <div style="color: var(--danger); font-size: 0.75rem;">{{ error }}</div>
+                    {% endfor %}
+                </div>
+            {% endfor %}
+            <div class="field-card" style="flex-direction: row; gap: 12px; margin-top: 16px;">
+                <button type="submit" style="background: var(--primary);">Save Student</button>
+                <a href="{% url 'school_portal_students' schema_name=tenant.schema_name %}" style="background: var(--surface-alt); padding: 10px 16px; border-radius: 6px; color: var(--text); text-decoration: none;">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

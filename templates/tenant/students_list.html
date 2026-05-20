@@ -12,7 +12,7 @@
         <p class="page-description">Manage student enrollments and records securely.</p>
     </div>
     <div class="field-card" style="margin: 0;">
-        <button style="background: var(--primary); color: #fff; padding: 10px 16px; border-radius: 6px; font-weight: 600; cursor: pointer;">+ Add Student</button>
+        <a href="{% url 'school_add_student' schema_name=tenant.schema_name %}" style="background: var(--primary); color: #fff; padding: 10px 16px; border-radius: 6px; font-weight: 600; text-decoration: none; display: inline-block;">+ Add Student</a>
     </div>
 </div>
 
