@@ -44,7 +44,6 @@
         
         .app-shell { display: flex; min-height: 100vh; }
         
-        /* Fixed Left Panel Configuration */
         .sidebar {
             background: var(--surface);
             border-right: 1px solid var(--border);
@@ -70,9 +69,7 @@
             display: flex;
             flex-direction: column;
         }
-        .main-content-wrapper {
-            flex: 1;
-        }
+        .main-content-wrapper { flex: 1; }
         .app-footer {
             margin-top: 48px;
             padding-top: 24px;
@@ -83,20 +80,10 @@
             color: var(--muted);
             font-size: 0.85rem;
         }
-        .footer-credits {
-            font-weight: 500;
-        }
-        .footer-links {
-            display: flex;
-            gap: 24px;
-        }
-        .footer-links a {
-            color: var(--muted);
-            transition: color 0.15s;
-        }
-        .footer-links a:hover {
-            color: var(--primary);
-        }
+        .footer-credits { font-weight: 500; }
+        .footer-links { display: flex; gap: 24px; }
+        .footer-links a { color: var(--muted); transition: color 0.15s; }
+        .footer-links a:hover { color: var(--primary); }
         
         body.sidebar-collapsed .sidebar { width: 72px; padding: 20px 8px; }
         body.sidebar-collapsed .page-body { margin-left: 72px; }
@@ -109,49 +96,29 @@
             padding: 0 6px;
             overflow: hidden;
         }
-        .brand-core { display: flex; align-items: center; gap: 10px; overflow: hidden; }
+        .brand-core { display: flex; align-items: center; gap: 10px; overflow: hidden; cursor: pointer; }
         .brand-logo { 
-            width: 36px; 
-            height: 36px; 
-            border-radius: 8px; 
-            display: grid; 
-            place-items: center; 
-            background: var(--primary); 
-            color: #ffffff; 
-            font-weight: 700; 
-            font-size: 0.95rem;
-            flex-shrink: 0;
+            width: 36px; height: 36px; border-radius: 8px; display: grid; place-items: center; 
+            background: var(--primary); color: #ffffff; font-weight: 700; font-size: 0.95rem; flex-shrink: 0;
         }
         .brand-info { transition: opacity 0.15s; white-space: nowrap; }
         .brand-title { font-weight: 600; font-size: 1rem; letter-spacing: -0.01em; max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
         .brand-meta { color: var(--muted); font-size: 0.78rem; max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
         
         .sidebar-toggle-btn {
-            background: transparent;
-            cursor: pointer;
-            color: var(--muted);
-            padding: 6px;
-            border-radius: 6px;
-            display: grid;
-            place-items: center;
+            background: transparent; cursor: pointer; color: var(--muted);
+            padding: 6px; border-radius: 6px; display: grid; place-items: center;
         }
         .sidebar-toggle-btn:hover { background: var(--surface-alt); color: var(--text); }
         
-        /* Nav Links */
         .sidebar-nav { list-style: none; display: flex; flex-direction: column; gap: 4px; }
-        .sidebar-nav a { 
-            display: flex; 
-            align-items: center; 
-            gap: 12px; 
-            padding: 10px 12px; 
-            border-radius: 8px; 
-            color: var(--text); 
-            font-size: 0.92rem; 
-            font-weight: 500;
-            transition: background 0.15s;
+        .sidebar-nav a, .dropdown-toggle {
+            display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px;
+            color: var(--text); font-size: 0.92rem; font-weight: 500;
+            transition: background 0.15s; cursor: pointer;
         }
-        .sidebar-nav a:hover { background: var(--surface-alt); }
-        .sidebar-nav a.active { background: var(--surface-alt); color: var(--primary); font-weight: 600; }
+        .sidebar-nav a:hover, .dropdown-toggle:hover { background: var(--surface-alt); }
+        .sidebar-nav a.active, .dropdown-toggle.active { background: var(--surface-alt); color: var(--primary); font-weight: 600; }
         .nav-label { transition: opacity 0.15s; white-space: nowrap; }
         
         body.sidebar-collapsed .brand-info,
@@ -160,7 +127,36 @@
         body.sidebar-collapsed .brand-container { justify-content: center; }
         body.sidebar-collapsed .sidebar-toggle-btn { display: none; }
         
-        /* Professional Base Bottom Footer & Settings Group block */
+        .dropdown { position: relative; }
+        .dropdown-menu {
+            display: none;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            min-width: 200px;
+            z-index: 1000;
+            box-shadow: var(--shadow);
+            padding: 8px 0;
+            margin-top: 4px;
+        }
+        .dropdown-menu a {
+            display: block;
+            padding: 8px 16px;
+            color: var(--text);
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: background 0.15s;
+        }
+        .dropdown-menu a:hover { background: var(--surface-alt); }
+        
+        body.sidebar-collapsed .dropdown { position: static; }
+        body.sidebar-collapsed .dropdown-menu {
+            position: fixed;
+            left: 72px;
+            top: auto;
+            margin-left: 8px;
+        }
+        
         .sidebar-footer {
             margin-top: auto;
             border-top: 1px solid var(--border);
@@ -177,37 +173,19 @@
             border-radius: 8px;
         }
         .footer-row-link {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 10px 12px;
-            border-radius: 8px;
-            color: var(--text);
-            font-size: 0.92rem;
-            font-weight: 500;
-            transition: background 0.15s;
-            width: 100%;
+            display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+            border-radius: 8px; color: var(--text); font-size: 0.92rem; font-weight: 500;
+            transition: background 0.15s; width: 100%;
         }
         .footer-row-link:hover { background: var(--surface-alt); }
         .footer-row-link.active { background: var(--surface-alt); color: var(--primary); font-weight: 600; }
         
-        body.sidebar-collapsed .footer-row-link {
-            justify-content: center;
-            padding: 10px 0;
-        }
-        body.sidebar-collapsed .footer-row {
-            justify-content: center;
-            padding: 4px 0;
-        }
+        body.sidebar-collapsed .footer-row-link { justify-content: center; padding: 10px 0; }
+        body.sidebar-collapsed .footer-row { justify-content: center; padding: 4px 0; }
         
         .footer-txt { font-size: 0.82rem; color: var(--muted); font-weight: 500; }
         .theme-action-icon-btn {
-            cursor: pointer;
-            color: var(--muted);
-            padding: 6px;
-            border-radius: 6px;
-            display: grid;
-            place-items: center;
+            cursor: pointer; color: var(--muted); padding: 6px; border-radius: 6px; display: grid; place-items: center;
         }
         .theme-action-icon-btn:hover { background: var(--surface-alt); color: var(--text); }
         
@@ -226,14 +204,17 @@
         .field-card { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
         .field-card label { font-size: 0.85rem; font-weight: 600; color: var(--text); }
         .field-card input, .field-card select, .field-card textarea {
-            width: 100%; border-radius: 6px; border: 1px solid var(--border); padding: 10px 12px; background: var(--surface-alt); color: var(--text); outline: none; font-size: 0.9rem;
+            width: 100%; border-radius: 6px; border: 1px solid var(--border); padding: 10px 12px;
+            background: var(--surface-alt); color: var(--text); outline: none; font-size: 0.9rem;
         }
         .field-card input:focus { border-color: var(--primary); background: var(--surface); }
         .field-card button { background: var(--primary); color: #ffffff; padding: 10px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.9rem; width: max-content; }
         .field-card button:hover { background: var(--primary-strong); }
         
         .logout-panel-btn {
-            display: inline-flex; align-items: center; gap: 8px; color: var(--danger); border: 1px solid var(--border); padding: 8px 14px; border-radius: 6px; font-size: 0.88rem; font-weight: 600; cursor: pointer; transition: background 0.15s; margin-top: 10px;
+            display: inline-flex; align-items: center; gap: 8px; color: var(--danger);
+            border: 1px solid var(--border); padding: 8px 14px; border-radius: 6px;
+            font-size: 0.88rem; font-weight: 600; cursor: pointer; transition: background 0.15s; margin-top: 10px;
         }
         .logout-panel-btn:hover { background: #fff1f2; border-color: #fca5a5; }
         [data-theme="dark"] .logout-panel-btn:hover { background: #7f1d1d; border-color: #ef4444; color: #fff; }
@@ -248,6 +229,9 @@
             .sidebar .sidebar-toggle-btn { display: none; }
             .page-body { margin-left: 72px; padding: 16px; }
         }
+        
+        .dropdown-arrow { transition: transform 0.2s; margin-left: auto; }
+        .dropdown-toggle.open .dropdown-arrow { transform: rotate(180deg); }
     </style>
     {% block extra_head %}{% endblock %}
 </head>
@@ -255,14 +239,14 @@
     <div class="app-shell">
         <aside class="sidebar">
             <div class="brand-container">
-                <div class="brand-core" id="sidebarLogoBlock" style="cursor: pointer;">
+                <div class="brand-core" id="sidebarLogoBlock">
                     <div class="brand-logo">{{ tenant.name|slice:":2"|upper }}</div>
                     <div class="brand-info">
                         <p class="brand-title" title="{{ tenant.name }}">{{ tenant.name }}</p>
                         <p class="brand-meta">{% block sidebar_meta %}School Portal{% endblock %}</p>
                     </div>
                 </div>
-                <button onclick="toggleSidebar()" class="sidebar-toggle-btn" title="Collapse Sidebar" type="button">
+                <button onclick="toggleSidebar()" class="sidebar-toggle-btn" title="Collapse Sidebar">
                     <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/>
                     </svg>
@@ -270,28 +254,29 @@
             </div>
 
             <nav class="sidebar-nav">
-                <a href="{% url 'school_portal' schema_name=tenant.schema_name %}" class="{% block nav_dashboard_active %}{% endblock %}">
-                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <a href="{% url 'school_portal' schema_name=tenant.schema_name %}">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"/>
                     </svg>
                     <span class="nav-label">Dashboard</span>
                 </a>
-                <a href="{% url 'school_portal_students' schema_name=tenant.schema_name %}" class="{% block nav_students_active %}{% endblock %}">
-                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <a href="{% url 'school_portal_students' schema_name=tenant.schema_name %}">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/>
                     </svg>
                     <span class="nav-label">Students</span>
                 </a>
-                <div class="dropdown">
-                    <a href="#" class="dropdown-toggle" onclick="toggleFeeMenu()">
-                        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-6-6h12"/></svg>
+                <div class="dropdown" id="feeDropdownContainer">
+                    <a href="#" class="dropdown-toggle" onclick="toggleFeeMenu(event)">
+                        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-6-6h12"/>
+                        </svg>
                         <span class="nav-label">Fee Management</span>
-                        <svg width="12" height="12" style="margin-left:auto;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <svg class="dropdown-arrow" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
                         </svg>
                     </a>
-                    <div class="dropdown-menu" id="feeDropdown">
+                    <div class="dropdown-menu" id="feeDropdownMenu">
                         <a href="{% url 'fee_structure' schema_name=tenant.schema_name %}">📊 Fee Structure</a>
                         <a href="{% url 'fee_generate' schema_name=tenant.schema_name %}">⚙️ Generate Fees</a>
                         <a href="{% url 'pending_fees' schema_name=tenant.schema_name %}">⏳ Pending Fees</a>
@@ -303,8 +288,8 @@
             </nav>
 
             <div class="sidebar-footer">
-                <a href="{% url 'school_portal_settings' schema_name=tenant.schema_name %}" class="footer-row-link {% block nav_settings_active %}{% endblock %}">
-                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <a href="{% url 'school_portal_settings' schema_name=tenant.schema_name %}" class="footer-row-link">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.43l-1.003.767a1.123 1.123 0 00-.417 1.03c.004.074.006.148.006.222 0 .074-.002.148-.006.222a1.123 1.123 0 00.417 1.03l1.003.767a1.125 1.125 0 01.26 1.43l-1.296 2.247a1.125 1.125 0 01-1.37.49l-1.216-.456a1.125 1.125 0 00-1.076.124c-.073.044-.146.087-.22.128-.332.183-.582.495-.644.869l-.214 1.28c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281a1.125 1.125 0 00-.646-.87c-.074-.04-.148-.083-.22-.127a1.124 1.124 0 00-1.075-.124l-1.217.456a1.125 1.125 0 01-1.37-.49l-1.296-2.247a1.125 1.125 0 01.26-1.43l1.003-.767a1.122 1.122 0 00.417-1.03c-.004-.074-.006-.148-.006-.222 0-.074.002-.148.006-.222a1.122 1.122 0 00-.417-1.03l-1.003-.767a1.125 1.125 0 01-.26-1.43l1.296-2.247a1.125 1.125 0 011.37-.49l1.216.456c.356.133.751.072 1.076-.124.072-.041.146-.084.218-.128.333-.183.582-.495.645-.869l.214-1.28z"/>
                         <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                     </svg>
@@ -312,8 +297,8 @@
                 </a>
                 <div class="footer-row">
                     <span class="footer-txt">System Mode</span>
-                    <button onclick="toggleTheme()" class="theme-action-icon-btn" title="Toggle Appearance" type="button">
-                        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <button onclick="toggleTheme()" class="theme-action-icon-btn" title="Toggle Appearance">
+                        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m0 13.5V21M5.136 5.136l1.591 1.591M17.273 17.273l1.591 1.591M21 12h-2.25M5.25 12H3m14.273-6.864l-1.591 1.591M6.727 16.727l-1.591 1.591M12 7.5a4.5 4.5 0 100 9 4.5 4.5 0 000-9z"/>
                         </svg>
                     </button>
@@ -354,6 +339,25 @@
             document.body.classList.toggle('sidebar-collapsed');
             const isCollapsed = document.body.classList.contains('sidebar-collapsed');
             localStorage.setItem('sidebarState', isCollapsed ? 'collapsed' : 'expanded');
+            // Close dropdown when collapsing
+            if (isCollapsed) {
+                const menu = document.getElementById('feeDropdownMenu');
+                if (menu) menu.style.display = 'none';
+                const toggle = document.querySelector('.dropdown-toggle');
+                if (toggle) toggle.classList.remove('open');
+            }
+        }
+
+        function toggleFeeMenu(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            const menu = document.getElementById('feeDropdownMenu');
+            const toggle = document.querySelector('.dropdown-toggle');
+            if (menu) {
+                const isVisible = menu.style.display === 'block';
+                menu.style.display = isVisible ? 'none' : 'block';
+                if (toggle) toggle.classList.toggle('open', !isVisible);
+            }
         }
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -370,6 +374,17 @@
                     }
                 });
             }
+            
+            // Close dropdown when clicking outside
+            document.addEventListener('click', function(event) {
+                const container = document.getElementById('feeDropdownContainer');
+                const menu = document.getElementById('feeDropdownMenu');
+                if (container && menu && !container.contains(event.target)) {
+                    menu.style.display = 'none';
+                    const toggle = document.querySelector('.dropdown-toggle');
+                    if (toggle) toggle.classList.remove('open');
+                }
+            });
         });
     </script>
 </body>

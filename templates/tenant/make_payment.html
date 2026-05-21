@@ -1,21 +1,90 @@
 {% extends 'tenant/base.html' %}
-{% block title %}Make Payment{% endblock %}
+{% block title %}Make Payment | {{ tenant.name }}{% endblock %}
+
 {% block body %}
-<div class="page-head"><h1>Pay Fees for {{ student.name }}</h1><p>Pending Total: Rs {{ total_pending }}</p></div>
+<div class="page-head">
+    <div>
+        <h1 class="page-title">Pay Fees for {{ student.name }}</h1>
+        <p class="page-description">Pending Total: <strong>Rs {{ total_pending }}</strong></p>
+    </div>
+</div>
+
 <div class="page-card">
     <form method="post">
         {% csrf_token %}
-        {{ form.as_p }}
-        <button type="submit">Submit Payment</button>
+        <div class="field-card">
+            <label>Amount (Rs)</label>
+            {{ form.amount }}
+        </div>
+        <div class="field-card">
+            <label>Payment Mode</label>
+            {{ form.payment_mode }}
+        </div>
+        <div class="field-card">
+            <label>Remarks (Optional)</label>
+            {{ form.remarks }}
+        </div>
+        <div style="margin-top: 20px;">
+            <button type="submit" class="btn-primary">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm0 0v2"/>
+                </svg>
+                Submit Payment
+            </button>
+        </div>
     </form>
 </div>
+
 <div class="page-card">
     <h3>Pending Fee Records</h3>
-    <table>
-        <tr><th>Month/Year</th><th>Amount</th><th>Paid</th><th>Remaining</th></tr>
-        {% for fr in pending_fees %}
-        <tr><td>{{ fr.month }}/{{ fr.year }}</td><td>Rs {{ fr.amount }}</td><td>Rs {{ fr.paid_amount }}</td><td>Rs {{ fr.remaining }}</td></tr>
-        {% empty %}<tr><td colspan="4">No pending fees for this student.</td></tr>{% endfor %}
-    </table>
+    <div style="overflow-x: auto;">
+        <table class="data-table">
+            <thead>
+                <tr><th>Month/Year</th><th>Amount (Rs)</th><th>Paid (Rs)</th><th>Remaining (Rs)</th></tr>
+            </thead>
+            <tbody>
+                {% for fr in pending_fees %}
+                <tr>
+                    <td>{{ fr.month }}/{{ fr.year }}</td>
+                    <td>{{ fr.amount }}</td>
+                    <td>{{ fr.paid_amount }}</td>
+                    <td><strong>{{ fr.remaining }}</strong></td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="4">No pending fees for this student.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
+
+<style>
+    .btn-primary {
+        background: var(--primary);
+        color: white;
+        padding: 10px 20px;
+        border-radius: 6px;
+        border: none;
+        font-weight: 600;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .data-table th, .data-table td {
+        padding: 10px;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+    }
+    .data-table th {
+        background: var(--surface-alt);
+        font-weight: 600;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+    }
+</style>
 {% endblock %}

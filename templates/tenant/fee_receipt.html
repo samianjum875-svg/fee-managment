@@ -1,43 +1,66 @@
 {% extends 'tenant/base.html' %}
-{% block title %}Fee Receipt{% endblock %}
+{% block title %}Fee Receipt | {{ tenant.name }}{% endblock %}
+
 {% block body %}
-<div class="page-card" id="receipt" style="max-width:800px; margin:0 auto;">
-    <div style="text-align:center; border-bottom:1px solid #ccc; padding-bottom:20px;">
-        {% if logo_url %}<img src="{{ logo_url }}" style="height:60px;">{% endif %}
+<div class="page-card" id="receipt" style="max-width: 800px; margin: 0 auto;">
+    <div style="text-align: center; border-bottom: 1px solid var(--border); padding-bottom: 20px; margin-bottom: 20px;">
+        {% if logo_url %}
+            <img src="{{ logo_url }}" style="height: 60px; margin-bottom: 10px;">
+        {% endif %}
         <h2>{{ tenant.name }}</h2>
-        <p>Fee Receipt</p>
+        <p style="color: var(--muted);">Official Fee Receipt</p>
     </div>
-    <div style="padding:20px;">
-        <p><strong>Receipt No:</strong> {{ payment.receipt_number }}</p>
-        <p><strong>Student Name:</strong> {{ payment.student.name }}</p>
-        <p><strong>Father Name:</strong> {{ payment.student.father_name }}</p>
-        <p><strong>Date:</strong> {{ payment.payment_date|date:"Y-m-d" }}</p>
-        <p><strong>Amount Paid:</strong> Rs {{ payment.amount }}</p>
-        <p><strong>Payment Mode:</strong> {{ payment.get_payment_mode_display }}</p>
-        <p><strong>Remarks:</strong> {{ payment.remarks|default:"-" }}</p>
+    <div style="padding: 0 20px;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
+            <div><strong>Receipt No:</strong> {{ payment.receipt_number }}</div>
+            <div><strong>Date:</strong> {{ payment.payment_date|date:"Y-m-d" }}</div>
+        </div>
+        <div style="margin-bottom: 15px;">
+            <div><strong>Student Name:</strong> {{ payment.student.name }}</div>
+            <div><strong>Father's Name:</strong> {{ payment.student.father_name }}</div>
+        </div>
+        <div style="margin-bottom: 15px;">
+            <div><strong>Amount Paid:</strong> Rs {{ payment.amount }}</div>
+            <div><strong>Payment Mode:</strong> {{ payment.get_payment_mode_display }}</div>
+            <div><strong>Remarks:</strong> {{ payment.remarks|default:"-" }}</div>
+        </div>
         <hr>
-        <h4>Fee Details:</h4>
-        <table style="width:100%">
-            <tr><th>Month/Year</th><th>Amount</th><th>Paid</th><th>Status</th></tr>
-            {% for fr in fee_records %}
-            <tr><td>{{ fr.month }}/{{ fr.year }}</td><td>Rs {{ fr.amount }}</td><td>Rs {{ fr.paid_amount }}</td><td>{{ fr.get_status_display }}</td></tr>
-            {% endfor %}
+        <h4 style="margin: 20px 0 10px;">Fee Details</h4>
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr><th style="text-align: left; padding: 8px; background: var(--surface-alt);">Month/Year</th>
+                    <th style="text-align: left; padding: 8px; background: var(--surface-alt);">Amount (Rs)</th>
+                    <th style="text-align: left; padding: 8px; background: var(--surface-alt);">Paid (Rs)</th>
+                    <th style="text-align: left; padding: 8px; background: var(--surface-alt);">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for fr in fee_records %}
+                <tr>
+                    <td style="padding: 8px; border-bottom: 1px solid var(--border);">{{ fr.month }}/{{ fr.year }}</td>
+                    <td style="padding: 8px; border-bottom: 1px solid var(--border);">{{ fr.amount }}</td>
+                    <td style="padding: 8px; border-bottom: 1px solid var(--border);">{{ fr.paid_amount }}</td>
+                    <td style="padding: 8px; border-bottom: 1px solid var(--border);">{{ fr.get_status_display }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
         </table>
-        <div style="margin-top:20px; text-align:center; font-size:12px; color:#888;">
+        <div style="margin-top: 30px; text-align: center; font-size: 12px; color: var(--muted);">
             <p>This is a computer generated receipt. No signature required.</p>
-            <p>Thank you!</p>
+            <p>Thank you for your payment!</p>
         </div>
     </div>
 </div>
-<div style="text-align:center; margin-top:20px;">
-    <button onclick="window.print()">Print Receipt</button>
-    <button onclick="downloadReceipt()">Download as Image</button>
+<div style="text-align: center; margin-top: 20px;">
+    <button onclick="window.print()" class="btn-secondary">🖨️ Print Receipt</button>
+    <button onclick="downloadReceipt()" class="btn-secondary">⬇️ Download as Image</button>
 </div>
+
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script>
 function downloadReceipt() {
     const element = document.getElementById('receipt');
-    html2canvas(element, { scale: 2, backgroundColor: '#ffffff' }).then(canvas => {
+    html2canvas(element, { scale: 2, backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--surface') }).then(canvas => {
         const link = document.createElement('a');
         link.download = 'receipt_{{ payment.receipt_number }}.png';
         link.href = canvas.toDataURL();
@@ -45,4 +68,19 @@ function downloadReceipt() {
     });
 }
 </script>
+<style>
+    .btn-secondary {
+        background: var(--surface-alt);
+        color: var(--text);
+        padding: 8px 16px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        font-weight: 500;
+        cursor: pointer;
+        margin: 0 5px;
+    }
+    .btn-secondary:hover {
+        background: var(--surface);
+    }
+</style>
 {% endblock %}

@@ -1,21 +1,78 @@
 {% extends 'tenant/base.html' %}
-{% block title %}Payment History{% endblock %}
+{% block title %}Payment History | {{ tenant.name }}{% endblock %}
+
 {% block body %}
-<div class="page-head"><h1>Payment History</h1></div>
-<div class="page-card" style="overflow-x:auto;">
-    <table style="width:100%">
-        <tr><th>Receipt No</th><th>Student</th><th>Amount</th><th>Date</th><th>Mode</th><th>Type</th><th>Receipt</th></tr>
-        {% for p in payments %}
-        <tr>
-            <td>{{ p.receipt_number }}</td>
-            <td>{{ p.student.name }}</td>
-            <td>Rs {{ p.amount }}</td>
-            <td>{{ p.payment_date|date:"Y-m-d" }}</td>
-            <td>{{ p.get_payment_mode_display }}</td>
-            <td>{{ p.get_payment_type_display }}</td>
-            <td><a href="{% url 'fee_receipt' schema_name=tenant.schema_name receipt_id=p.id %}" target="_blank">View</a></td>
-        </tr>
-        {% empty %}<tr><td colspan="7">No payments recorded.</td></tr>{% endfor %}
+<div class="page-head">
+    <h1 class="page-title">Payment History</h1>
+    <p class="page-description">All recorded fee transactions</p>
+</div>
+
+<div class="page-card" style="overflow-x: auto;">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Receipt No</th>
+                <th>Student</th>
+                <th>Amount (Rs)</th>
+                <th>Date</th>
+                <th>Mode</th>
+                <th>Type</th>
+                <th>Receipt</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in payments %}
+            <tr>
+                <td><code>{{ p.receipt_number }}</code></td>
+                <td>{{ p.student.name }}</td>
+                <td>Rs {{ p.amount }}</td>
+                <td>{{ p.payment_date|date:"Y-m-d" }}</td>
+                <td>{{ p.get_payment_mode_display }}</td>
+                <td>{{ p.get_payment_type_display }}</td>
+                <td>
+                    <a href="{% url 'fee_receipt' schema_name=tenant.schema_name receipt_id=p.id %}" target="_blank" class="btn-small">
+                        View
+                    </a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="7" style="text-align: center;">No payments recorded yet.</td></tr>
+            {% endfor %}
+        </tbody>
     </table>
 </div>
+
+<style>
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .data-table th, .data-table td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+    }
+    .data-table th {
+        background: var(--surface-alt);
+        font-weight: 600;
+        color: var(--muted);
+        text-transform: uppercase;
+        font-size: 0.75rem;
+    }
+    .btn-small {
+        background: var(--primary);
+        color: white;
+        padding: 6px 12px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        text-decoration: none;
+        display: inline-block;
+    }
+    code {
+        background: var(--surface-alt);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: monospace;
+    }
+</style>
 {% endblock %}

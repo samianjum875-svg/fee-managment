@@ -1,22 +1,98 @@
 {% extends 'tenant/base.html' %}
-{% block title %}Pending Fees{% endblock %}
+{% block title %}Pending Fees | {{ tenant.name }}{% endblock %}
+
 {% block body %}
-<div class="page-head"><h1>Pending Fees</h1><p>Total Pending: Rs {{ total_pending }}</p></div>
-<div class="page-card" style="overflow-x:auto;">
-    <table style="width:100%">
-        <tr><th>Roll No</th><th>Student Name</th><th>Month/Year</th><th>Amount</th><th>Paid</th><th>Due Date</th><th>Status</th><th>Action</th></tr>
-        {% for fr in fee_records %}
-        <tr>
-            <td>{{ fr.student.roll_number }}</td>
-            <td>{{ fr.student.name }}</td>
-            <td>{{ fr.month }}/{{ fr.year }}</td>
-            <td>Rs {{ fr.amount }}</td>
-            <td>Rs {{ fr.paid_amount }}</td>
-            <td>{{ fr.due_date|date:"Y-m-d" }}</td>
-            <td>{{ fr.get_status_display }}</td>
-            <td><a href="{% url 'make_payment' schema_name=tenant.schema_name student_id=fr.student.id %}">Pay</a></td>
-        </tr>
-        {% empty %}<tr><td colspan="8">No pending fees.</td></tr>{% endfor %}
+<div class="page-head">
+    <div>
+        <h1 class="page-title">Pending Fees</h1>
+        <p class="page-description">View and manage outstanding fee records</p>
+    </div>
+    <div class="stat-badge">Total Pending: <strong>Rs {{ total_pending }}</strong></div>
+</div>
+
+<div class="page-card" style="overflow-x: auto;">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Roll No</th>
+                <th>Student Name</th>
+                <th>Month/Year</th>
+                <th>Amount (Rs)</th>
+                <th>Paid (Rs)</th>
+                <th>Due Date</th>
+                <th>Status</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for fr in fee_records %}
+            <tr>
+                <td>{{ fr.student.roll_number }}</td>
+                <td>{{ fr.student.name }}</td>
+                <td>{{ fr.month }}/{{ fr.year }}</td>
+                <td>{{ fr.amount }}</td>
+                <td>{{ fr.paid_amount }}</td>
+                <td>{{ fr.due_date|date:"Y-m-d" }}</td>
+                <td>
+                    <span class="status-badge status-{{ fr.status }}">{{ fr.get_status_display }}</span>
+                </td>
+                <td>
+                    <a href="{% url 'make_payment' schema_name=tenant.schema_name student_id=fr.student.id %}" class="btn-small">
+                        Pay Now
+                    </a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="8" style="text-align: center;">No pending fees.</td></tr>
+            {% endfor %}
+        </tbody>
     </table>
 </div>
+
+<style>
+    .stat-badge {
+        background: var(--primary);
+        color: white;
+        padding: 8px 16px;
+        border-radius: 40px;
+        font-size: 0.9rem;
+    }
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .data-table th, .data-table td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+    }
+    .data-table th {
+        background: var(--surface-alt);
+        font-weight: 600;
+        color: var(--muted);
+        text-transform: uppercase;
+        font-size: 0.75rem;
+    }
+    .status-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    .status-pending { background: #fff3e0; color: #e67e22; }
+    .status-partial { background: #e6f0fa; color: #1e3a8a; }
+    .status-paid { background: #e6f4ea; color: #137333; }
+    .status-overdue { background: #fdeded; color: #c0392b; }
+    .btn-small {
+        background: var(--primary);
+        color: white;
+        padding: 6px 12px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        text-decoration: none;
+        display: inline-block;
+    }
+    .btn-small:hover { background: var(--primary-strong); }
+</style>
 {% endblock %}
