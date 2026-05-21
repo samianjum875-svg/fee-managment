@@ -9,6 +9,8 @@ from datetime import date, timedelta
 import json
 from functools import wraps
 from django.views.decorators.csrf import csrf_exempt
+from django.utils import timezone
+from django.views.decorators.http import require_http_methods
 
 from .models import SchoolClient, Student, FeeStructure, FeeRecord, PaymentTransaction, SchoolFeeSettings
 from .forms import StudentForm, FeeCollectionForm, FeeSettingsForm, FeeStructureForm, FamilyPaymentForm
@@ -62,6 +64,8 @@ def dashboard(request, schema_name):
         'months_labels': months_labels,
         'months_amounts': months_amounts,
         'logo_url': tenant.school_logo.url if tenant.school_logo else None,
+        'today': today,
+        'start_date': first_day_month,
     }
     return render(request, 'tenant/dashboard.html', context)
 
@@ -135,7 +139,6 @@ def fee_collection(request, schema_name, student_id=None):
         recent_payments = PaymentTransaction.objects.select_related('student').order_by('-payment_date')[:10]
         total_pending_all = sum(fr.remaining for fr in FeeRecord.objects.filter(status__in=['pending', 'partial', 'overdue']))
         
-        # Build list of students with pending fees
         pending_students = []
         for student in Student.objects.filter(status='active'):
             pending = sum(fr.remaining for fr in student.fee_records.filter(status__in=['pending', 'partial', 'overdue']))
@@ -150,7 +153,6 @@ def fee_collection(request, schema_name, student_id=None):
                 })
         pending_students.sort(key=lambda x: x['pending_total'], reverse=True)
         
-        # Handle POST (payment submission)
         if request.method == 'POST':
             student_id_post = request.POST.get('student_id')
             amount = Decimal(request.POST.get('amount', '0'))
@@ -195,7 +197,6 @@ def fee_collection(request, schema_name, student_id=None):
             messages.success(request, f"₹{amount} received from {student.name}. Receipt: {payment.receipt_number}")
             return redirect('fee_receipt', schema_name=schema_name, receipt_id=payment.id)
         
-        # GET: show form or selected student
         selected_student = None
         pending_list = []
         if student_id:
@@ -509,17 +510,17 @@ def family_payment(request, schema_name):
 
 # ------------------- API: Student Search -------------------
 def student_search_api(request, schema_name):
-    tenant = get_tenant(request, schema_name)
     q = request.GET.get('q', '')
     with schema_context(schema_name):
         students = Student.objects.filter(
-            Q(name__icontains=q) | Q(roll_number__icontains=q) | Q(father_name__icontains=q)
+            Q(name__icontains=q) | Q(roll_number__icontains=q) | Q(father_name__icontains=q) | Q(father_cnic__icontains=q)
         )[:10]
         data = [{'id': s.id, 'name': s.name, 'roll_no': s.roll_number, 'grade': s.grade} for s in students]
     return JsonResponse(data, safe=False)
 
 # ------------------- API: Fee Status -------------------
 @csrf_exempt
+@require_http_methods(["GET"])
 def fee_status_api(request):
     if not request.session.get('school_admin_authenticated'):
         return JsonResponse({'error': 'Unauthorized'}, status=401)
@@ -530,6 +531,7 @@ def fee_status_api(request):
         tenant = SchoolClient.objects.get(schema_name=schema_name)
     except SchoolClient.DoesNotExist:
         return JsonResponse({'error': 'Tenant not found'}, status=404)
+    
     with schema_context(schema_name):
         settings, _ = SchoolFeeSettings.objects.get_or_create(pk=1)
         last_record = FeeRecord.objects.order_by('-year', '-month').first()
@@ -543,13 +545,17 @@ def fee_status_api(request):
             next_month = today.month + 1 if today.month < 12 else 1
             next_year = today.year + 1 if today.month == 12 else today.year
             next_date = date(next_year, next_month, min(gen_day, monthrange(next_year, next_month)[1]))
-        return JsonResponse({'last_generation': last_gen, 'next_generation': next_date.strftime('%Y-%m-%d'), 'status': 'success'})
+        
+        return JsonResponse({
+            'last_generation': last_gen, 
+            'next_generation': next_date.strftime('%Y-%m-%d'), 
+            'status': 'success'
+        })
 
 # ------------------- API: Manual Generate -------------------
 @csrf_exempt
+@require_http_methods(["POST"])
 def manual_generate_api(request):
-    if request.method != 'POST':
-        return JsonResponse({'error': 'Only POST allowed'}, status=405)
     if not request.session.get('school_admin_authenticated'):
         return JsonResponse({'error': 'Unauthorized'}, status=401)
     schema_name = request.session.get('school_admin_schema')
@@ -559,31 +565,44 @@ def manual_generate_api(request):
         tenant = SchoolClient.objects.get(schema_name=schema_name)
     except SchoolClient.DoesNotExist:
         return JsonResponse({'error': 'Tenant not found'}, status=404)
+    
     with schema_context(schema_name):
         settings, _ = SchoolFeeSettings.objects.get_or_create(pk=1)
         today = date.today()
         month = today.month
         year = today.year
-        if FeeRecord.objects.filter(month=month, year=year).exists():
-            return JsonResponse({'message': f'Fee records for {month}/{year} already exist.'})
+        
+        # Check if already generated
+        existing = FeeRecord.objects.filter(month=month, year=year)
+        if existing.exists():
+            return JsonResponse({'message': f'Fee records for {month}/{year} already exist. ({existing.count()} records)'})
+        
         students = Student.objects.filter(status='active')
         due_date = today + timedelta(days=settings.due_date_offset)
         created = 0
+        errors = []
+        
         for student in students:
-            base_fee = student.custom_fee if student.custom_fee > 0 else (FeeStructure.objects.filter(grade=student.grade).first().monthly_fee if FeeStructure.objects.filter(grade=student.grade).exists() else 0)
+            base_fee = student.custom_fee if student.custom_fee > 0 else 0
+            if base_fee == 0:
+                fee_struct = FeeStructure.objects.filter(grade=student.grade).first()
+                if fee_struct:
+                    base_fee = fee_struct.monthly_fee
+            
             if base_fee > 0:
-                FeeRecord.objects.get_or_create(
+                obj, is_new = FeeRecord.objects.get_or_create(
                     student=student, month=month, year=year,
                     defaults={'amount': base_fee, 'due_date': due_date, 'status': 'pending'}
                 )
-                created += 1
-        return JsonResponse({'message': f'Generated {created} fee records for {month}/{year}.'})
+                if is_new:
+                    created += 1
+        
+        return JsonResponse({'message': f'Generated {created} fee records for {month}/{year}.', 'created': created})
 
 # ------------------- API: Manual Generate for Single Student -------------------
 @csrf_exempt
+@require_http_methods(["POST"])
 def manual_generate_single_api(request):
-    if request.method != 'POST':
-        return JsonResponse({'error': 'Only POST allowed'}, status=405)
     if not request.session.get('school_admin_authenticated'):
         return JsonResponse({'error': 'Unauthorized'}, status=401)
     schema_name = request.session.get('school_admin_schema')
@@ -596,20 +615,30 @@ def manual_generate_single_api(request):
         tenant = SchoolClient.objects.get(schema_name=schema_name)
     except SchoolClient.DoesNotExist:
         return JsonResponse({'error': 'Tenant not found'}, status=404)
+    
     with schema_context(schema_name):
         try:
             student = Student.objects.get(id=student_id)
         except Student.DoesNotExist:
             return JsonResponse({'error': 'Student not found'}, status=404)
+        
         settings, _ = SchoolFeeSettings.objects.get_or_create(pk=1)
         today = date.today()
         month = today.month
         year = today.year
+        
         if FeeRecord.objects.filter(student=student, month=month, year=year).exists():
             return JsonResponse({'message': f'Fee already exists for {student.name} for {month}/{year}.'})
-        base_fee = student.custom_fee if student.custom_fee > 0 else (FeeStructure.objects.filter(grade=student.grade).first().monthly_fee if FeeStructure.objects.filter(grade=student.grade).exists() else 0)
+        
+        base_fee = student.custom_fee if student.custom_fee > 0 else 0
+        if base_fee == 0:
+            fee_struct = FeeStructure.objects.filter(grade=student.grade).first()
+            if fee_struct:
+                base_fee = fee_struct.monthly_fee
+        
         if base_fee <= 0:
             return JsonResponse({'error': 'No fee structure defined for this grade.'}, status=400)
+        
         due_date = today + timedelta(days=settings.due_date_offset)
         FeeRecord.objects.create(
             student=student, month=month, year=year,

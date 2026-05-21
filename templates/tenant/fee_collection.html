@@ -29,7 +29,7 @@
         <h3>Find Student by Roll Number / Name / CNIC</h3>
     </div>
     <div class="search-form">
-        <input type="text" id="studentSearchInput" class="search-input" placeholder="e.g., 1001, samjh, 12345...">
+        <input type="text" id="studentSearchInput" class="search-input" placeholder="e.g., 1001, name, CNIC...">
         <button id="searchStudentBtn" class="btn-primary">Search</button>
     </div>
     <div id="searchResult" class="search-result" style="display:none;"></div>
@@ -169,6 +169,7 @@
 </div>
 
 <style>
+/* Same styles as before - keeping it compact */
 .header-stats { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
 .stat-badge { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: var(--surface-alt); border-radius: 2rem; font-size: 0.85rem; font-weight: 500; border: 1px solid var(--border); }
 .card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; }
@@ -204,151 +205,173 @@
 </style>
 
 <script>
-    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken');
-    function getCookie(name) {
-        let value = null;
-        if (document.cookie && document.cookie !== '') {
-            const cookies = document.cookie.split(';');
-            for (let i = 0; i < cookies.length; i++) {
-                const cookie = cookies[i].trim();
-                if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                    value = decodeURIComponent(cookie.substring(name.length + 1));
-                    break;
-                }
+function getCookie(name) {
+    let value = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                value = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
             }
         }
-        return value;
     }
+    return value;
+}
+const csrfToken = getCookie('csrftoken');
 
-    function loadStudent(studentId) {
-        window.location.href = `{% url 'fee_collection' schema_name=tenant.schema_name %}?student_id=${studentId}`;
-    }
+// FIXED: Use path parameter instead of query string
+function loadStudent(studentId) {
+    const url = `/portal/{{ tenant.schema_name }}/fee/collection/${studentId}/`;
+    window.location.href = url;
+}
 
-    // Attach click to "Select" buttons inside pending list
-    document.querySelectorAll('.select-student-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const id = btn.getAttribute('data-id');
-            if (id) loadStudent(id);
-        });
+// Attach click to "Select" buttons inside pending list
+document.querySelectorAll('.select-student-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const id = btn.getAttribute('data-id');
+        if (id) loadStudent(id);
     });
-    document.querySelectorAll('.student-item').forEach(item => {
-        const btn = item.querySelector('.select-student-btn');
-        if (btn) {
-            item.addEventListener('click', (e) => {
-                if (e.target !== btn) btn.click();
-            });
-        }
-    });
+});
 
-    // Filter pending list
-    const pendingSearch = document.getElementById('pendingSearch');
-    if (pendingSearch) {
-        pendingSearch.addEventListener('input', function() {
-            const filter = this.value.toLowerCase();
-            document.querySelectorAll('.student-item').forEach(item => {
-                const text = item.innerText.toLowerCase();
-                item.style.display = text.includes(filter) ? '' : 'none';
-            });
+document.querySelectorAll('.student-item').forEach(item => {
+    const btn = item.querySelector('.select-student-btn');
+    if (btn) {
+        item.addEventListener('click', (e) => {
+            if (e.target !== btn) btn.click();
         });
     }
+});
 
-    // Manual search by roll/name/cnic
-    const searchInput = document.getElementById('studentSearchInput');
-    const searchBtn = document.getElementById('searchStudentBtn');
-    const searchResultDiv = document.getElementById('searchResult');
-    async function performSearch() {
-        const q = searchInput.value.trim();
-        if (q.length < 2) {
-            searchResultDiv.style.display = 'none';
+// Filter pending list
+const pendingSearch = document.getElementById('pendingSearch');
+if (pendingSearch) {
+    pendingSearch.addEventListener('input', function() {
+        const filter = this.value.toLowerCase();
+        document.querySelectorAll('.student-item').forEach(item => {
+            const text = item.innerText.toLowerCase();
+            item.style.display = text.includes(filter) ? '' : 'none';
+        });
+    });
+}
+
+// Manual search by roll/name/cnic
+const searchInput = document.getElementById('studentSearchInput');
+const searchBtn = document.getElementById('searchStudentBtn');
+const searchResultDiv = document.getElementById('searchResult');
+
+async function performSearch() {
+    const q = searchInput.value.trim();
+    if (q.length < 2) {
+        searchResultDiv.style.display = 'none';
+        return;
+    }
+    try {
+        const url = `/portal/{{ tenant.schema_name }}/api/student-search/?q=${encodeURIComponent(q)}`;
+        const resp = await fetch(url);
+        const data = await resp.json();
+        if (data.length === 0) {
+            searchResultDiv.innerHTML = '<div class="result-item">No student found</div>';
+            searchResultDiv.style.display = 'block';
             return;
         }
-        try {
-            const resp = await fetch(`/portal/{{ tenant.schema_name }}/api/student-search/?q=${encodeURIComponent(q)}`);
-            const data = await resp.json();
-            if (data.length === 0) {
-                searchResultDiv.innerHTML = '<div class="result-item">No student found</div>';
-                searchResultDiv.style.display = 'block';
-                return;
-            }
-            let html = '';
-            data.forEach(s => {
-                html += `<div class="result-item" data-id="${s.id}">
-                            <div><strong>${s.name}</strong><br><small>${s.roll_no} | ${s.grade}</small></div>
-                            <button class="select-student-btn">Select</button>
-                         </div>`;
-            });
-            searchResultDiv.innerHTML = html;
-            searchResultDiv.style.display = 'block';
-            document.querySelectorAll('#searchResult .result-item').forEach(el => {
-                const btn = el.querySelector('.select-student-btn');
-                const id = el.getAttribute('data-id');
-                if (btn) {
-                    btn.addEventListener('click', () => loadStudent(id));
-                    el.addEventListener('click', (e) => {
-                        if (e.target !== btn) btn.click();
-                    });
-                }
-            });
-        } catch(e) {
-            console.error(e);
-            searchResultDiv.innerHTML = '<div class="result-item">Error searching</div>';
-            searchResultDiv.style.display = 'block';
-        }
-    }
-    searchBtn.addEventListener('click', performSearch);
-    searchInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') performSearch(); });
-
-    // Live remaining amount calculation
-    const amountInput = document.getElementById('amountInput');
-    const remainingSpan = document.getElementById('remainingAfter');
-    const totalPendingSpan = document.getElementById('totalPending');
-    if (amountInput && totalPendingSpan) {
-        const total = parseFloat(totalPendingSpan.innerText);
-        amountInput.addEventListener('input', function() {
-            const paid = parseFloat(this.value) || 0;
-            remainingSpan.value = (total - paid) > 0 ? `₹${(total - paid).toFixed(2)}` : '₹0.00';
+        let html = '';
+        data.forEach(s => {
+            html += `<div class="result-item" data-id="${s.id}">
+                        <div><strong>${s.name}</strong><br><small>${s.roll_no} | ${s.grade}</small></div>
+                        <button class="select-student-btn">Select</button>
+                     </div>`;
         });
-        amountInput.dispatchEvent(new Event('input'));
+        searchResultDiv.innerHTML = html;
+        searchResultDiv.style.display = 'block';
+        document.querySelectorAll('#searchResult .result-item').forEach(el => {
+            const btn = el.querySelector('.select-student-btn');
+            const id = el.getAttribute('data-id');
+            if (btn) {
+                btn.addEventListener('click', () => loadStudent(id));
+                el.addEventListener('click', (e) => {
+                    if (e.target !== btn) btn.click();
+                });
+            }
+        });
+    } catch(e) {
+        console.error('Search error:', e);
+        searchResultDiv.innerHTML = '<div class="result-item">Error searching. Please try again.</div>';
+        searchResultDiv.style.display = 'block';
     }
+}
 
-    // Generate all fees
-    document.getElementById('generateAllBtn')?.addEventListener('click', async () => {
+searchBtn.addEventListener('click', performSearch);
+searchInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') performSearch(); });
+
+// Live remaining amount calculation
+const amountInput = document.getElementById('amountInput');
+const remainingSpan = document.getElementById('remainingAfter');
+const totalPendingSpan = document.getElementById('totalPending');
+if (amountInput && totalPendingSpan) {
+    const total = parseFloat(totalPendingSpan.innerText);
+    amountInput.addEventListener('input', function() {
+        const paid = parseFloat(this.value) || 0;
+        const remaining = total - paid;
+        remainingSpan.value = remaining > 0 ? `₹${remaining.toFixed(2)}` : '₹0.00';
+    });
+    amountInput.dispatchEvent(new Event('input'));
+}
+
+// Generate all fees
+const generateAllBtn = document.getElementById('generateAllBtn');
+if (generateAllBtn) {
+    generateAllBtn.addEventListener('click', async () => {
         if (!confirm('Generate fee records for current month for all active students?')) return;
-        const btn = document.getElementById('generateAllBtn');
-        btn.disabled = true;
-        btn.innerHTML = 'Generating...';
+        generateAllBtn.disabled = true;
+        generateAllBtn.innerHTML = 'Generating...';
         try {
             const resp = await fetch('/api/manual-generate/', {
                 method: 'POST',
-                headers: { 'X-CSRFToken': csrfToken },
+                headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/json' },
             });
             const data = await resp.json();
-            alert(data.message);
+            if (data.message) alert(data.message);
+            else if (data.error) alert('Error: ' + data.error);
             location.reload();
-        } catch(e) { alert('Error generating fees'); }
-        finally { btn.disabled = false; btn.innerHTML = 'Generate All Fees'; }
+        } catch(e) {
+            console.error('Generation error:', e);
+            alert('Error generating fees: ' + e.message);
+        } finally {
+            generateAllBtn.disabled = false;
+            generateAllBtn.innerHTML = 'Generate All Fees';
+        }
     });
+}
 
-    // Generate single fee for current month
-    const generateSingleBtn = document.getElementById('generateSingleBtn');
-    if (generateSingleBtn) {
-        generateSingleBtn.addEventListener('click', async () => {
-            const studentId = {{ selected_student.id }};
-            if (!confirm(`Generate current month fee for {{ selected_student.name }}?`)) return;
-            generateSingleBtn.disabled = true;
-            generateSingleBtn.innerHTML = 'Generating...';
-            try {
-                const resp = await fetch(`/api/manual-generate-single/?student_id=${studentId}`, {
-                    method: 'POST',
-                    headers: { 'X-CSRFToken': csrfToken },
-                });
-                const data = await resp.json();
-                alert(data.message);
-                location.reload();
-            } catch(e) { alert('Error generating fee'); }
-            finally { generateSingleBtn.disabled = false; generateSingleBtn.innerHTML = 'Generate Current Month Fee'; }
-        });
-    }
+// Generate single fee for current month
+const generateSingleBtn = document.getElementById('generateSingleBtn');
+if (generateSingleBtn) {
+    generateSingleBtn.addEventListener('click', async () => {
+        const studentId = {{ selected_student.id|default:'null' }};
+        if (!studentId) return;
+        if (!confirm(`Generate current month fee for {{ selected_student.name }}?`)) return;
+        generateSingleBtn.disabled = true;
+        generateSingleBtn.innerHTML = 'Generating...';
+        try {
+            const resp = await fetch(`/api/manual-generate-single/?student_id=${studentId}`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/json' },
+            });
+            const data = await resp.json();
+            if (data.message) alert(data.message);
+            else if (data.error) alert('Error: ' + data.error);
+            location.reload();
+        } catch(e) {
+            console.error('Generation error:', e);
+            alert('Error generating fee: ' + e.message);
+        } finally {
+            generateSingleBtn.disabled = false;
+            generateSingleBtn.innerHTML = 'Generate Current Month Fee';
+        }
+    });
+}
 </script>
 {% endblock %}

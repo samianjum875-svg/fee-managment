@@ -11,42 +11,40 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         tenants = SchoolClient.objects.filter(is_active=True).exclude(schema_name='public')
         today = date.today()
+        generated_count = 0
+        
         for tenant in tenants:
             with schema_context(tenant.schema_name):
-                settings, _ = SchoolFeeSettings.objects.get_or_create(tenant=tenant)
+                settings, created = SchoolFeeSettings.objects.get_or_create(pk=1)
                 generation_day = settings.fee_generation_day
-                # Check if today is generation day
+                
                 if today.day == generation_day:
-                    # Determine month/year to generate (current month)
                     month = today.month
                     year = today.year
-                    # Avoid generating twice
+                    
                     if FeeRecord.objects.filter(month=month, year=year).exists():
-                        self.stdout.write(f"Skipping {tenant.schema_name} - fees already generated for {month}/{year}")
+                        self.stdout.write(f"Skipping {tenant.schema_name} - fees already generated")
                         continue
+                    
                     students = Student.objects.filter(status='active')
-                    # Due date calculation
-                    if month == 12:
-                        due_year = year + 1
-                        due_month = 1
-                    else:
-                        due_year = year
-                        due_month = month + 1
-                    due_date = date(due_year, due_month, 1) + timedelta(days=settings.due_date_offset - 1)
-                    created = 0
+                    due_date = today + timedelta(days=settings.due_date_offset)
+                    created_records = 0
+                    
                     for student in students:
-                        base_fee = student.custom_fee if student.custom_fee > 0 else (FeeStructure.objects.filter(grade=student.grade).first().monthly_fee if FeeStructure.objects.filter(grade=student.grade).exists() else 0)
+                        base_fee = student.custom_fee if student.custom_fee > 0 else 0
+                        if base_fee == 0:
+                            fee_struct = FeeStructure.objects.filter(grade=student.grade).first()
+                            if fee_struct:
+                                base_fee = fee_struct.monthly_fee
+                        
                         if base_fee > 0:
-                            FeeRecord.objects.get_or_create(
-                                student=student,
-                                month=month,
-                                year=year,
-                                defaults={
-                                    'amount': base_fee,
-                                    'due_date': due_date
-                                }
+                            FeeRecord.objects.create(
+                                student=student, month=month, year=year,
+                                amount=base_fee, due_date=due_date, status='pending'
                             )
-                            created += 1
-                    self.stdout.write(f"Generated {created} fee records for {tenant.schema_name} for {month}/{year}")
-                else:
-                    self.stdout.write(f"Skipping {tenant.schema_name} - generation day {generation_day} not today")
+                            created_records += 1
+                    
+                    generated_count += created_records
+                    self.stdout.write(f"Generated {created_records} fee records for {tenant.schema_name}")
+        
+        self.stdout.write(self.style.SUCCESS(f"Total: {generated_count} records"))

@@ -163,7 +163,7 @@ class PaymentTransaction(models.Model):
     def __str__(self):
         return f"{self.receipt_number} - {self.student.name} - ₹{self.amount}"
 
-# ------------------- School Fee Settings (Tenant-specific, no FK) -------------------
+# ------------------- School Fee Settings (SIMPLIFIED - Single record per tenant) -------------------
 class SchoolFeeSettings(models.Model):
     fee_generation_day = models.PositiveSmallIntegerField(default=1, help_text="Day of month (1-31)")
     due_date_offset = models.PositiveSmallIntegerField(default=15, help_text="Days after generation when fee is due")
@@ -173,3 +173,6 @@ class SchoolFeeSettings(models.Model):
 
     def __str__(self):
         return "Fee Settings"
+
+    class Meta:
+        verbose_name_plural = "Fee Settings"

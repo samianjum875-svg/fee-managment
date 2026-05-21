@@ -1,5 +1,5 @@
 from django.contrib import admin
-from django.urls import path, re_path
+from django.urls import path, re_path, include
 from django.conf import settings as django_settings
 from django.conf.urls.static import static
 from django.http import HttpResponse
@@ -11,7 +11,11 @@ from .views import defaulters, reports, settings, fee_structure, fee_settings, f
 from .views import student_search_api, add_student, edit_student, fee_status_api, manual_generate_api, manual_generate_single_api
 
 def saas_homepage(request):
-    return HttpResponse('<h1>AXIS School Management System</h1><p>Welcome to Multi-Tenant Platform</p>')
+    return HttpResponse('''
+    <h1>AXIS School Management System</h1>
+    <p>Welcome to Multi-Tenant Platform</p>
+    <p>Go to <a href="/admin/">Admin Panel</a> to manage schools</p>
+    ''')
 
 def school_login(request, schema_name):
     tenant = get_object_or_404(SchoolClient, schema_name=schema_name)
@@ -21,6 +25,7 @@ def school_login(request, schema_name):
         if username == tenant.admin_username and password == tenant.admin_password:
             request.session['school_admin_authenticated'] = True
             request.session['school_admin_schema'] = tenant.schema_name
+            request.session['school_admin_username'] = username
             return redirect('dashboard', schema_name=tenant.schema_name)
         return render(request, 'tenant/login.html', {'tenant': tenant, 'error': 'Invalid credentials'})
     return render(request, 'tenant/login.html', {'tenant': tenant})
@@ -65,7 +70,7 @@ urlpatterns = [
     path('portal/<slug:schema_name>/logout/', school_logout, name='school_logout'),
     path('portal/<slug:schema_name>/logout/', school_logout, name='tenant_logout'),
     
-    # Core
+    # Core - using the wrapped views
     path('portal/<slug:schema_name>/', dashboard_view, name='dashboard'),
     path('portal/<slug:schema_name>/students/', student_list_view, name='student_list'),
     path('portal/<slug:schema_name>/students/add/', add_student_view, name='add_student'),

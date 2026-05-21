@@ -225,9 +225,6 @@ class PaymentTransactionAdmin(admin.ModelAdmin):
     list_filter = ('payment_type', 'payment_mode', 'payment_date')
     search_fields = ('receipt_number', 'student__name', 'student__father_cnic')
 
-# Updated: removed 'tenant' from list_display and list_filter
 @admin.register(SchoolFeeSettings)
 class SchoolFeeSettingsAdmin(admin.ModelAdmin):
     list_display = ('fee_generation_day', 'due_date_offset', 'late_fee_penalty', 'updated_at')
-    list_filter = ('fee_generation_day',)
-    search_fields = ('fee_generation_day',)
