@@ -6,10 +6,10 @@ from django.http import HttpResponse
 from django.shortcuts import render, redirect, get_object_or_404
 
 from .models import SchoolClient
-from .views import dashboard, student_list, student_profile, fee_collection, fee_receipt
-from .views import defaulters, reports, settings, fee_structure, fee_settings, family_payment
-from .views import student_search_api, add_student, edit_student, fee_status_api, manual_generate_api, manual_generate_single_api
-from .views import student_fee_records_api, student_payments_api
+from .views import dashboard, student_list, student_profile, fee_collection, fee_receipt, debug_payments_api
+from .views import defaulters, reports, settings, fee_structure, fee_settings, family_payment, debug_payments_api
+from .views import student_search_api, add_student, edit_student, fee_status_api, manual_generate_api, manual_generate_single_api, debug_payments_api
+from .views import student_fee_records_api, student_payments_api, debug_payments_api
 
 def saas_homepage(request):
     return HttpResponse('''
@@ -61,6 +61,7 @@ student_fee_records_api_view = login_required_for_schema(student_fee_records_api
 student_payments_api_view = login_required_for_schema(student_payments_api)
 
 urlpatterns = [
+    path('api/debug-payments/', debug_payments_api, name='debug_payments_api'),
     path('', saas_homepage),
     path('admin/', admin.site.urls),
     path('api/fee-status/', fee_status_api, name='fee_status_api'),

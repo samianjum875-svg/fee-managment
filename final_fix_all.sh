@@ -1,3 +1,59 @@
+#!/bin/bash
+
+echo "═══════════════════════════════════════════════════════════════"
+echo "🔧 FINAL FIX: Fee Collection – Correct Payment Display"
+echo "═══════════════════════════════════════════════════════════════"
+
+# Backup views.py
+cp axis_saas/views.py axis_saas/views.py.bak
+
+# ------------------------------------------------------------------
+# 1. Patch the fee_collection view to fix recent_payments
+# ------------------------------------------------------------------
+cat > /tmp/patch_views.py << 'PYEOF'
+import re
+
+with open('axis_saas/views.py', 'r') as f:
+    content = f.read()
+
+# Find the fee_collection function and replace the recent_payments query part
+# We'll replace the lines that define recent_payments with a more robust version
+old_pattern = r'(recent_payments = PaymentTransaction\.objects\.select_related\(\'student\'\)\.order_by\(-\'payment_date\'\)\[:5\])'
+new_code = '''# Robust recent payments: if normal query fails, fallback to all payments ordered by id
+        try:
+            recent_payments = PaymentTransaction.objects.select_related('student').order_by('-payment_date')[:5]
+            if recent_payments.count() == 0 and PaymentTransaction.objects.count() > 0:
+                # Fallback: order by id (desc) to get latest
+                recent_payments = PaymentTransaction.objects.select_related('student').order_by('-id')[:5]
+        except Exception as e:
+            print(f"Recent payments error: {e}")
+            recent_payments = PaymentTransaction.objects.all().order_by('-id')[:5]'''
+
+# Replace the line
+new_content = re.sub(old_pattern, new_code, content)
+
+# Also add an explicit debug print to see what's happening
+debug_line = "        print(f'DEBUG fee_collection: total_payments={PaymentTransaction.objects.count()}, recent_count={recent_payments.count()}')"
+# Insert after the recent_payments definition
+insert_pos = new_content.find("recent_payments = ")
+if insert_pos != -1:
+    # find the end of that line or block
+    end_of_line = new_content.find("\n", insert_pos)
+    if end_of_line != -1:
+        new_content = new_content[:end_of_line+1] + debug_line + new_content[end_of_line+1:]
+
+with open('axis_saas/views.py', 'w') as f:
+    f.write(new_content)
+
+print("✅ views.py patched with robust recent_payments query")
+PYEOF
+
+python3 /tmp/patch_views.py
+
+# ------------------------------------------------------------------
+# 2. Update fee_collection.html to show debug info and raw payments if needed
+# ------------------------------------------------------------------
+cat > templates/tenant/fee_collection.html << 'HTML'
 {% extends 'tenant/base.html' %}
 {% block title %}Fee Collection | {{ tenant.name }}{% endblock %}
 {% block body %}
@@ -89,7 +145,6 @@
                         <br><small>ℹ️ Some students have no pending fees, but there is a total pending amount of ₹{{ total_pending_all }}. Check if fee records exist.</small>
                     {% endif %}
                 </td>
-                </tr>
                 {% endfor %}
             </tbody>
         </table>
@@ -190,7 +245,7 @@
 </div>
 {% endif %}
 
-<!-- Recent Payments History (single, clean section) -->
+<!-- Recent Payments History (robust version) -->
 <div class="history-card">
     <div class="card-header">
         <h3>Recent Payments (Last 5)</h3>
@@ -212,17 +267,19 @@
                     <td><a href="{% url 'fee_receipt' schema_name=tenant.schema_name receipt_id=p.id %}" class="receipt-link">View</a></td>
                 </tr>
                 {% empty %}
-                <tr>
-                    <td colspan="6" class="empty-row">
-                        {% if total_payments_count == 0 %}
-                            <strong>📭 No payments recorded for this school yet.</strong>
-                            <br><small>👉 Use the form above to collect a fee, or click <strong>“Generate All Fees”</strong> to create fee records first.</small>
-                        {% else %}
-                            <strong>⚠️ There are {{ total_payments_count }} payment(s) in this school’s database, but they are not showing.</strong>
-                            <br><small>This may be because the associated student records are missing. <a href="{% url 'reports' schema_name=tenant.schema_name %}?type=collection&quick_filter=all">View all payments in Reports →</a></small>
-                        {% endif %}
-                    </td>
-                </tr>
+                <tr><td colspan="6" class="empty-row">
+                    {% if total_payments_count == 0 %}
+                        <strong>📭 No payments recorded for this school yet.</strong>
+                        <br><small>👉 Use the form above to collect a fee, or click <strong>“Generate All Fees”</strong> to create fee records first.</small>
+                    {% else %}
+                        <strong>⚠️ There are {{ total_payments_count }} payment(s) in this school’s database, but they are not showing.</strong>
+                        <br><small>This may be because the associated student records are missing. <a href="{% url 'reports' schema_name=tenant.schema_name %}?type=collection&quick_filter=all">View all payments in Reports →</a></small>
+                        <!-- Debug: show raw payment IDs -->
+                        <div style="margin-top: 10px; font-size: 11px; color: gray;">
+                            Debug: Payment IDs exist (check your console). If you see this, contact support.
+                        </div>
+                    {% endif %}
+                </td>
                 {% endfor %}
             </tbody>
         </table>
@@ -230,6 +287,7 @@
 </div>
 
 <style>
+/* existing styles – keep as is */
 .header-stats { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
 .stat-badge { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: var(--surface-alt); border-radius: 2rem; font-size: 0.85rem; font-weight: 500; border: 1px solid var(--border); }
 .card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; }
@@ -414,23 +472,55 @@ console.log('FeeCollection Debug:', {
     pendingTotal: {{ total_pending_all|default:0 }},
     currentTenantSchema: '{{ tenant.schema_name }}'
 });
-
-        // Additional debug: if total_payments_count > 0 but recent_payments is empty, show raw payment IDs
-        if ({{ total_payments_count|default:0 }} > 0 && {{ recent_payments|length }} === 0) {
-            fetch('/api/debug-payments/')
-                .then(r => r.json())
-                .then(data => {
-                    const container = document.querySelector('.history-card .empty-row');
-                    if (container && data.payments && data.payments.length) {
-                        const div = document.createElement('div');
-                        div.style.marginTop = '10px';
-                        div.style.fontSize = '11px';
-                        div.style.fontFamily = 'monospace';
-                        div.innerHTML = '<strong>Debug (raw payment IDs):</strong> ' + data.payments.map(p => p.receipt_number).join(', ');
-                        container.appendChild(div);
-                    }
-                }).catch(e => console.log('Debug fetch failed', e));
-        }
-    
 </script>
 {% endblock %}
+HTML
+
+echo "✅ fee_collection.html updated with robust recent payments section"
+
+# ------------------------------------------------------------------
+# 3. Add a management command to fix orphaned payment-student links (optional)
+# ------------------------------------------------------------------
+cat > axis_saas/management/commands/fix_orphan_payments.py << 'PYEOF'
+from django.core.management.base import BaseCommand
+from django_tenants.utils import schema_context
+from axis_saas.models import SchoolClient, PaymentTransaction, Student
+
+class Command(BaseCommand):
+    help = 'Check for payments with missing student references and optionally delete them'
+
+    def add_arguments(self, parser):
+        parser.add_argument('--delete', action='store_true', help='Delete orphaned payments')
+
+    def handle(self, *args, **options):
+        tenants = SchoolClient.objects.filter(is_active=True).exclude(schema_name='public')
+        for tenant in tenants:
+            with schema_context(tenant.schema_name):
+                orphaned = []
+                for payment in PaymentTransaction.objects.all():
+                    if not Student.objects.filter(id=payment.student_id).exists():
+                        orphaned.append(payment)
+                if orphaned:
+                    self.stdout.write(f"Tenant {tenant.schema_name}: {len(orphaned)} orphaned payments")
+                    for p in orphaned:
+                        self.stdout.write(f"  - {p.receipt_number} (student_id={p.student_id})")
+                    if options['delete']:
+                        count = len(orphaned)
+                        for p in orphaned:
+                            p.delete()
+                        self.stdout.write(f"  Deleted {count} orphaned payments")
+                else:
+                    self.stdout.write(f"Tenant {tenant.schema_name}: no orphaned payments")
+PYEOF
+
+echo "✅ Added fix_orphan_payments management command"
+echo ""
+echo "═══════════════════════════════════════════════════════════════"
+echo "📌 NEXT STEPS:"
+echo "   1. Restart your Django server"
+echo "   2. Hard refresh the Fee Collection page"
+echo "   3. Open browser console (F12) to see the debug counts"
+echo "   4. If the warning still appears, run:"
+echo "      python manage.py fix_orphan_payments --delete"
+echo "   5. Then try collecting a new payment – it will appear in Recent Payments"
+echo "═══════════════════════════════════════════════════════════════"

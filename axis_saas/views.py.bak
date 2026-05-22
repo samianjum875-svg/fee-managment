@@ -32,7 +32,6 @@ def dashboard(request, schema_name):
         defaulters_count = Student.objects.filter(fee_records__status__in=['pending', 'partial', 'overdue']).distinct().count()
         total_payments_count = PaymentTransaction.objects.count()
         recent_payments = PaymentTransaction.objects.select_related('student').order_by('-payment_date')[:5]
-        print(f"DEBUG fee_collection: total_payments={PaymentTransaction.objects.count()}, recent_count={recent_payments.count()}")
         top_defaulters = []
         for student in Student.objects.all():
             pending = sum(fr.remaining for fr in student.fee_records.filter(status__in=['pending', 'partial', 'overdue']))
@@ -115,7 +114,6 @@ def fee_collection(request, schema_name, student_id=None):
         today_collection = PaymentTransaction.objects.filter(payment_date=today).aggregate(Sum('amount'))['amount__sum'] or 0
         total_payments_count = PaymentTransaction.objects.count()
         recent_payments = PaymentTransaction.objects.select_related('student').order_by('-payment_date')[:5]
-        print(f"DEBUG fee_collection: total_payments={PaymentTransaction.objects.count()}, recent_count={recent_payments.count()}")
         total_pending_all = sum(fr.remaining for fr in FeeRecord.objects.filter(status__in=['pending', 'partial', 'overdue']))
         
         # Filters for pending students
@@ -302,10 +300,6 @@ def reports(request, schema_name):
             quick_filter = 'last6months'
     with schema_context(schema_name):
         payments_qs = PaymentTransaction.objects.filter(payment_date__gte=start_date, payment_date__lte=end_date)
-        # Ensure we get results even if select_related later fails (we don't use select_related there)
-        # No change needed, but we add a safety check
-        if payments_qs.count() == 0 and PaymentTransaction.objects.filter(payment_date__year=start_date.year).count() > 0:
-            print(f"Warning: payments exist but date range filter returned none. Check date fields.")
         if search_q:
             payments_qs = payments_qs.filter(
                 Q(receipt_number__icontains=search_q) | Q(student__name__icontains=search_q) |
@@ -708,21 +702,3 @@ def student_payments_api(request, schema_name, student_id):
             'url': f'/portal/{schema_name}/fee/receipt/{p.id}/'
         } for p in payments]
         return JsonResponse(data, safe=False)
-
-# ------------------- API: Debug Payments (raw list) -------------------
-@csrf_exempt
-@require_http_methods(["GET"])
-def debug_payments_api(request):
-    if not request.session.get('school_admin_authenticated'):
-        return JsonResponse({'error': 'Unauthorized'}, status=401)
-    schema_name = request.session.get('school_admin_schema')
-    if not schema_name:
-        return JsonResponse({'error': 'No tenant schema'}, status=400)
-    try:
-        tenant = SchoolClient.objects.get(schema_name=schema_name)
-    except SchoolClient.DoesNotExist:
-        return JsonResponse({'error': 'Tenant not found'}, status=404)
-    with schema_context(schema_name):
-        payments = PaymentTransaction.objects.all().order_by('-payment_date')[:10]
-        data = [{'id': p.id, 'receipt_number': p.receipt_number, 'student_id': p.student_id, 'amount': float(p.amount), 'date': p.payment_date.strftime('%Y-%m-%d')} for p in payments]
-        return JsonResponse({'payments': data, 'total': PaymentTransaction.objects.count()})

@@ -1,3 +1,11 @@
+#!/bin/bash
+
+echo "🔧 Fixing Fee Collection page – duplicate sections and payment display..."
+
+# ----------------------------------------------------------------------
+# 1. Replace fee_collection.html with a clean version (single Recent Payments section)
+# ----------------------------------------------------------------------
+cat > templates/tenant/fee_collection.html << 'HTML'
 {% extends 'tenant/base.html' %}
 {% block title %}Fee Collection | {{ tenant.name }}{% endblock %}
 {% block body %}
@@ -22,7 +30,7 @@
     </div>
 </div>
 
-<!-- Quick Find Student -->
+<!-- Search Student (Quick Find) -->
 <div class="filter-card">
     <div class="card-header">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
@@ -35,7 +43,7 @@
     <div id="searchResult" class="search-result" style="display:none;"></div>
 </div>
 
-<!-- Students with Pending Fees (Filtered & Paginated) -->
+<!-- Students with Pending Fees (with Filters & Pagination) -->
 <div class="students-list-card">
     <div class="card-header">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
@@ -81,15 +89,7 @@
                     <td><button class="select-student-btn" data-id="{{ s.id }}">Select</button></td>
                 </tr>
                 {% empty %}
-                <tr><td colspan="6" class="empty-row">
-                    No students with pending fees.
-                    {% if total_pending_all == 0 %}
-                        <br><small>🎉 All fees are paid! Use "Generate All Fees" to create fee records for the current month.</small>
-                    {% else %}
-                        <br><small>ℹ️ Some students have no pending fees, but there is a total pending amount of ₹{{ total_pending_all }}. Check if fee records exist.</small>
-                    {% endif %}
-                </td>
-                </tr>
+                <tr><td colspan="6" class="empty-row">No students with pending fees.{% if total_pending_all == 0 %} 🎉 All caught up!{% endif %}</td></tr>
                 {% endfor %}
             </tbody>
         </table>
@@ -153,6 +153,7 @@
         </div>
     </form>
 
+    <!-- Pending Fee Records Table -->
     <div class="pending-table">
         <h4>Pending Fee Records</h4>
         <div class="table-responsive">
@@ -190,7 +191,7 @@
 </div>
 {% endif %}
 
-<!-- Recent Payments History (single, clean section) -->
+<!-- Recent Payments History (Last 5 payments) -->
 <div class="history-card">
     <div class="card-header">
         <h3>Recent Payments (Last 5)</h3>
@@ -199,7 +200,7 @@
     <div class="table-responsive">
         <table class="data-table">
             <thead>
-                <tr><th>Receipt</th><th>Student</th><th>Amount</th><th>Date</th><th>Mode</th><th>Receipt</th></tr>
+                <tr><th>Receipt</th><th>Student</th><th>Amount</th><th>Date</th><th>Mode</th><th>Receipt</th></table>
             </thead>
             <tbody>
                 {% for p in recent_payments %}
@@ -212,17 +213,15 @@
                     <td><a href="{% url 'fee_receipt' schema_name=tenant.schema_name receipt_id=p.id %}" class="receipt-link">View</a></td>
                 </tr>
                 {% empty %}
-                <tr>
-                    <td colspan="6" class="empty-row">
-                        {% if total_payments_count == 0 %}
-                            <strong>📭 No payments recorded for this school yet.</strong>
-                            <br><small>👉 Use the form above to collect a fee, or click <strong>“Generate All Fees”</strong> to create fee records first.</small>
-                        {% else %}
-                            <strong>⚠️ There are {{ total_payments_count }} payment(s) in this school’s database, but they are not showing.</strong>
-                            <br><small>This may be because the associated student records are missing. <a href="{% url 'reports' schema_name=tenant.schema_name %}?type=collection&quick_filter=all">View all payments in Reports →</a></small>
-                        {% endif %}
-                    </td>
-                </tr>
+                <tr><td colspan="6" class="empty-row">
+                    No payments recorded yet.
+                    {% if total_payments_count > 0 %}
+                        <br><strong>⚠️ There are {{ total_payments_count }} payment(s) in the system, but they are not appearing here.</strong>
+                        <br><small>This may indicate a database schema issue. Please check that all payments are associated with the correct tenant schema. <a href="{% url 'reports' schema_name=tenant.schema_name %}?type=collection&quick_filter=all">View all payments in Reports →</a></small>
+                    {% else %}
+                        <br><small>💡 You haven't collected any fees. Use the form above to collect a fee.</small>
+                    {% endif %}
+                </td></tr>
                 {% endfor %}
             </tbody>
         </table>
@@ -230,6 +229,7 @@
 </div>
 
 <style>
+/* Additional styles for pagination and improved table */
 .header-stats { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
 .stat-badge { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: var(--surface-alt); border-radius: 2rem; font-size: 0.85rem; font-weight: 500; border: 1px solid var(--border); }
 .card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; }
@@ -238,6 +238,11 @@
 .search-input { flex: 1; padding: 0.6rem 1rem; border-radius: 2rem; border: 1px solid var(--border); background: var(--surface-alt); }
 .filter-form { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: flex-end; margin-bottom: 1rem; }
 .filter-input, .filter-select { padding: 0.4rem 0.75rem; border-radius: 2rem; border: 1px solid var(--border); background: var(--surface-alt); }
+.student-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); transition: background 0.2s; cursor: pointer; }
+.student-item:hover { background: var(--surface-alt); }
+.student-info { flex: 2; }
+.student-info strong { display: block; }
+.roll, .class { font-size: 0.7rem; color: var(--muted); }
 .pending-amount { font-weight: 700; color: var(--danger); }
 .select-student-btn { background: var(--primary); color: white; border: none; border-radius: 1rem; padding: 0.25rem 0.75rem; cursor: pointer; }
 .student-panel { margin-top: 0; }
@@ -257,7 +262,7 @@
 .search-result { margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 0.5rem; }
 .result-item { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; border-bottom: 1px solid var(--border); cursor: pointer; }
 .result-item:hover { background: var(--surface-alt); }
-.empty-row { text-align: center; padding: 1.5rem; color: var(--muted); }
+.empty-row { text-align: center; padding: 1rem; color: var(--muted); }
 .pagination { margin-top: 1rem; text-align: center; display: flex; justify-content: center; gap: 0.5rem; flex-wrap: wrap; }
 .page-link { padding: 0.3rem 0.8rem; background: var(--surface-alt); border: 1px solid var(--border); border-radius: 2rem; text-decoration: none; color: var(--text); }
 .page-link:hover { background: var(--primary); color: white; }
@@ -286,6 +291,7 @@ function loadStudent(studentId) {
     window.location.href = url;
 }
 
+// Attach click handlers to select buttons (for both pending list and search results)
 function bindSelectButtons() {
     document.querySelectorAll('.select-student-btn').forEach(btn => {
         btn.removeEventListener('click', window.selectHandler);
@@ -298,9 +304,10 @@ function bindSelectButtons() {
         window.selectHandler = handler;
     });
 }
+
 bindSelectButtons();
 
-// Student search
+// Manual search by roll/name/cnic
 const searchInput = document.getElementById('studentSearchInput');
 const searchBtn = document.getElementById('searchStudentBtn');
 const searchResultDiv = document.getElementById('searchResult');
@@ -329,7 +336,7 @@ async function performSearch() {
         });
         searchResultDiv.innerHTML = html;
         searchResultDiv.style.display = 'block';
-        bindSelectButtons();
+        bindSelectButtons(); // re-bind for new buttons
     } catch(e) {
         console.error('Search error:', e);
         searchResultDiv.innerHTML = '<div class="result-item">Error searching. Please try again.</div>';
@@ -339,7 +346,7 @@ async function performSearch() {
 searchBtn.addEventListener('click', performSearch);
 searchInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') performSearch(); });
 
-// Remaining amount calculation
+// Live remaining amount calculation
 const amountInput = document.getElementById('amountInput');
 const remainingSpan = document.getElementById('remainingAfter');
 const totalPendingSpan = document.getElementById('totalPending');
@@ -407,30 +414,18 @@ if (generateSingleBtn) {
     });
 }
 
-// Console debug
+// Console debug info
 console.log('FeeCollection Debug:', {
     recentPaymentsCount: {{ recent_payments|length }},
     totalPaymentsCount: {{ total_payments_count|default:0 }},
-    pendingTotal: {{ total_pending_all|default:0 }},
-    currentTenantSchema: '{{ tenant.schema_name }}'
+    pendingTotal: {{ total_pending_all|default:0 }}
 });
-
-        // Additional debug: if total_payments_count > 0 but recent_payments is empty, show raw payment IDs
-        if ({{ total_payments_count|default:0 }} > 0 && {{ recent_payments|length }} === 0) {
-            fetch('/api/debug-payments/')
-                .then(r => r.json())
-                .then(data => {
-                    const container = document.querySelector('.history-card .empty-row');
-                    if (container && data.payments && data.payments.length) {
-                        const div = document.createElement('div');
-                        div.style.marginTop = '10px';
-                        div.style.fontSize = '11px';
-                        div.style.fontFamily = 'monospace';
-                        div.innerHTML = '<strong>Debug (raw payment IDs):</strong> ' + data.payments.map(p => p.receipt_number).join(', ');
-                        container.appendChild(div);
-                    }
-                }).catch(e => console.log('Debug fetch failed', e));
-        }
-    
 </script>
 {% endblock %}
+HTML
+
+echo "✅ Clean fee_collection.html deployed (single recent payments section)."
+echo "🔁 Restart your Django server and hard refresh the Fee Collection page."
+echo "📌 If payments still don't appear, check the browser console (F12) for debug counts."
+echo "   Also verify that payments exist in the database by running:"
+echo "   python manage.py shell -c \"from axis_saas.models import PaymentTransaction; print(PaymentTransaction.objects.count())\""

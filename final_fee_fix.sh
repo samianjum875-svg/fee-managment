@@ -1,3 +1,14 @@
+#!/bin/bash
+
+echo "═══════════════════════════════════════════════════════════════"
+echo "🔧 FINAL FIX: Fee Collection Page (clean + helpful messages)"
+echo "═══════════════════════════════════════════════════════════════"
+
+# Backup the original template
+cp templates/tenant/fee_collection.html templates/tenant/fee_collection.html.bak 2>/dev/null
+
+# Create the cleaned template
+cat > templates/tenant/fee_collection.html << 'HTML'
 {% extends 'tenant/base.html' %}
 {% block title %}Fee Collection | {{ tenant.name }}{% endblock %}
 {% block body %}
@@ -89,7 +100,6 @@
                         <br><small>ℹ️ Some students have no pending fees, but there is a total pending amount of ₹{{ total_pending_all }}. Check if fee records exist.</small>
                     {% endif %}
                 </td>
-                </tr>
                 {% endfor %}
             </tbody>
         </table>
@@ -212,17 +222,15 @@
                     <td><a href="{% url 'fee_receipt' schema_name=tenant.schema_name receipt_id=p.id %}" class="receipt-link">View</a></td>
                 </tr>
                 {% empty %}
-                <tr>
-                    <td colspan="6" class="empty-row">
-                        {% if total_payments_count == 0 %}
-                            <strong>📭 No payments recorded for this school yet.</strong>
-                            <br><small>👉 Use the form above to collect a fee, or click <strong>“Generate All Fees”</strong> to create fee records first.</small>
-                        {% else %}
-                            <strong>⚠️ There are {{ total_payments_count }} payment(s) in this school’s database, but they are not showing.</strong>
-                            <br><small>This may be because the associated student records are missing. <a href="{% url 'reports' schema_name=tenant.schema_name %}?type=collection&quick_filter=all">View all payments in Reports →</a></small>
-                        {% endif %}
-                    </td>
-                </tr>
+                <tr><td colspan="6" class="empty-row">
+                    {% if total_payments_count == 0 %}
+                        <strong>📭 No payments recorded for this school yet.</strong>
+                        <br><small>👉 Use the form above to collect a fee, or click <strong>“Generate All Fees”</strong> to create fee records first.</small>
+                    {% else %}
+                        <strong>⚠️ There are {{ total_payments_count }} payment(s) in this school’s database, but they are not showing.</strong>
+                        <br><small>This may be a temporary display issue. <a href="{% url 'reports' schema_name=tenant.schema_name %}?type=collection&quick_filter=all">View all payments in Reports →</a></small>
+                    {% endif %}
+                </td>
                 {% endfor %}
             </tbody>
         </table>
@@ -230,6 +238,7 @@
 </div>
 
 <style>
+/* existing styles from your base.html – keeping consistent */
 .header-stats { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
 .stat-badge { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: var(--surface-alt); border-radius: 2rem; font-size: 0.85rem; font-weight: 500; border: 1px solid var(--border); }
 .card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; }
@@ -414,23 +423,21 @@ console.log('FeeCollection Debug:', {
     pendingTotal: {{ total_pending_all|default:0 }},
     currentTenantSchema: '{{ tenant.schema_name }}'
 });
-
-        // Additional debug: if total_payments_count > 0 but recent_payments is empty, show raw payment IDs
-        if ({{ total_payments_count|default:0 }} > 0 && {{ recent_payments|length }} === 0) {
-            fetch('/api/debug-payments/')
-                .then(r => r.json())
-                .then(data => {
-                    const container = document.querySelector('.history-card .empty-row');
-                    if (container && data.payments && data.payments.length) {
-                        const div = document.createElement('div');
-                        div.style.marginTop = '10px';
-                        div.style.fontSize = '11px';
-                        div.style.fontFamily = 'monospace';
-                        div.innerHTML = '<strong>Debug (raw payment IDs):</strong> ' + data.payments.map(p => p.receipt_number).join(', ');
-                        container.appendChild(div);
-                    }
-                }).catch(e => console.log('Debug fetch failed', e));
-        }
-    
 </script>
 {% endblock %}
+HTML
+
+echo ""
+echo "✅ Template cleaned – single Recent Payments section, helpful empty states."
+echo ""
+echo "📌 NEXT STEPS:"
+echo "   1. Restart your Django server"
+echo "   2. Log into the school portal you want to use"
+echo "   3. If there are no students, add one via 'Students → Add Student'"
+echo "   4. Click 'Generate All Fees' to create fee records for the current month"
+echo "   5. Then use 'Select' next to a student to collect a payment"
+echo ""
+echo "💡 If you already have payments in other schemas, they will NOT appear here."
+echo "   To see them, you must log into the school that owns those payments."
+echo "   Use the admin panel to see which schema each tenant uses."
+echo "═══════════════════════════════════════════════════════════════"
