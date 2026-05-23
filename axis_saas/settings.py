@@ -108,8 +108,11 @@ INSTALLED_APPS = SHARED_APPS + [app for app in TENANT_APPS if app not in SHARED_
 
 TENANT_MODEL = 'axis_saas.SchoolClient'
 TENANT_DOMAIN_MODEL = 'axis_saas.SchoolDomain'
-# IMPORTANT: Use path‑based tenant detection
 TENANT_SUBFOLDER_PREFIX = 'portal'
+
+# ✅ Fix for "No tenant for hostname" error – use public schema on root URL
+PUBLIC_SCHEMA_NAME = 'public'
+TENANT_LIMIT_SET_CALLS = True
 
 DATABASE_ROUTERS = (
     'django_tenants.routers.TenantSyncRouter',
