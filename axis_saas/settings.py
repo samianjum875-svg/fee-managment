@@ -13,7 +13,7 @@ ALLOWED_HOSTS = ['*']
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',   # WhiteNoise
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django_tenants.middleware.main.TenantMainMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -44,16 +44,14 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'axis_saas.wsgi.application'
 
-# Database – must use django_tenants postgresql backend
+# Database – force django_tenants backend
 if os.environ.get('DATABASE_URL'):
     import dj_database_url
     DATABASES = {
         'default': dj_database_url.config(conn_max_age=600, ssl_require=True)
     }
-    # Force the correct engine
     DATABASES['default']['ENGINE'] = 'django_tenants.postgresql_backend'
 else:
-    # Fallback for build time (dummy, should never be used at runtime)
     DATABASES = {
         'default': {
             'ENGINE': 'django_tenants.postgresql_backend',
@@ -110,6 +108,8 @@ INSTALLED_APPS = SHARED_APPS + [app for app in TENANT_APPS if app not in SHARED_
 
 TENANT_MODEL = 'axis_saas.SchoolClient'
 TENANT_DOMAIN_MODEL = 'axis_saas.SchoolDomain'
+# IMPORTANT: Use path‑based tenant detection
+TENANT_SUBFOLDER_PREFIX = 'portal'
 
 DATABASE_ROUTERS = (
     'django_tenants.routers.TenantSyncRouter',
@@ -123,8 +123,3 @@ SESSION_SAVE_EVERY_REQUEST = False
 CSRF_TRUSTED_ORIGINS = ['https://*.hf.space', 'http://localhost:8000']
 SESSION_COOKIE_PATH = '/'
 SESSION_FILE_PATH = '/tmp/django_sessions/'
-
-# For production, you may want to enable these:
-# CSRF_COOKIE_SECURE = True
-# SESSION_COOKIE_SECURE = True
-# SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
