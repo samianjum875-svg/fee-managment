@@ -19,23 +19,25 @@ def saas_homepage(request):
     ''')
 
 def school_login(request, schema_name):
-    # If middleware flagged a missing tenant, try to create it (or get existing)
-    missing_schema = getattr(request, 'missing_tenant_schema', None)
-    if missing_schema == schema_name:
+    # ---- Auto‑create missing SchoolClient if the PostgreSQL schema exists ----
+    try:
+        tenant = SchoolClient.objects.get(schema_name=schema_name)
+    except SchoolClient.DoesNotExist:
         # Check if the actual PostgreSQL schema exists
         from django_tenants.utils import schema_context
+        from django.db import connection
         schema_exists = False
         try:
-            with schema_context(schema_name):
-                from django.contrib.auth import get_user_model
-                User = get_user_model()
-                User.objects.exists()   # harmless query to test connection
+            # Try to set the schema (this will raise if schema doesn't exist)
+            connection.set_schema(schema_name)
             schema_exists = True
+            # Reset to public
+            connection.set_schema_to_public()
         except Exception:
             schema_exists = False
 
         if schema_exists:
-            # Use get_or_create to avoid duplicate key errors
+            # Create the missing SchoolClient row
             tenant, created = SchoolClient.objects.get_or_create(
                 schema_name=schema_name,
                 defaults={
@@ -46,15 +48,13 @@ def school_login(request, schema_name):
                 }
             )
             if created:
-                print(f"✅ Created missing SchoolClient for '{schema_name}'")
+                print(f"✅ Auto-created SchoolClient for '{schema_name}'")
             else:
                 print(f"ℹ️ SchoolClient for '{schema_name}' already exists")
         else:
             raise Http404(f"Tenant schema '{schema_name}' does not exist.")
 
-    # Retrieve tenant (will exist now)
-    tenant = get_object_or_404(SchoolClient, schema_name=schema_name)
-
+    # ---- Process login ----
     if request.method == 'POST':
         username = request.POST.get('username')
         password = request.POST.get('password')
