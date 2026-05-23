@@ -1,3 +1,84 @@
+#!/bin/bash
+
+# final_reports_fix.sh - Completely replaces reports.html and cleans up views.py
+# Run from: ~/axis_school_sys
+
+set -e
+
+VIEWS_FILE="axis_saas/views.py"
+TEMPLATE_FILE="templates/tenant/reports.html"
+
+echo "=== AXIS Reports - Final Fix ==="
+
+# Backup current files (just in case)
+cp "$VIEWS_FILE" "${VIEWS_FILE}.final_backup"
+cp "$TEMPLATE_FILE" "${TEMPLATE_FILE}.final_backup"
+echo "✅ Backups created."
+
+# ----------------------------------------------------------------------
+# 1. Fix the reports view (remove duplicate and keep paginated version)
+# ----------------------------------------------------------------------
+echo "✍️  Fixing reports view..."
+
+python3 << 'PYTHON_SCRIPT'
+import re
+
+view_file = "axis_saas/views.py"
+
+with open(view_file, "r") as f:
+    content = f.read()
+
+# The current reports function appears twice. We need to replace the whole thing with a clean, single copy.
+# We'll extract the first occurrence (which should be the paginated version we added earlier)
+# and then remove any other occurrences.
+
+pattern = r'^def reports\(request, schema_name\):.*?(?=^def [a-zA-Z_]|$)'
+matches = list(re.finditer(pattern, content, re.DOTALL | re.MULTILINE))
+
+if len(matches) == 0:
+    print("❌ Could not find reports function. Exiting.")
+    exit(1)
+
+# Use the first match as the correct one
+correct_func = matches[0].group(0)
+
+# Remove all occurrences (from first to last) and then insert the correct one once.
+# Simpler: replace the entire content from the first match start to the end of the last match.
+first_start = matches[0].start()
+last_end = matches[-1].end()
+new_content = content[:first_start] + correct_func + content[last_end:]
+
+# Verify that only one copy exists
+if new_content.count("def reports(") > 1:
+    # If still multiple, do a more aggressive replace: find all and keep only first
+    lines = new_content.splitlines(keepends=True)
+    new_lines = []
+    in_reports = False
+    reports_count = 0
+    for line in lines:
+        if line.strip().startswith("def reports("):
+            reports_count += 1
+            if reports_count > 1:
+                in_reports = True
+                continue
+        if in_reports and line.strip().startswith("def "):
+            in_reports = False
+        if not in_reports:
+            new_lines.append(line)
+    new_content = "".join(new_lines)
+
+with open(view_file, "w") as f:
+    f.write(new_content)
+
+print("✅ reports view cleaned up.")
+PYTHON_SCRIPT
+
+# ----------------------------------------------------------------------
+# 2. Write a completely new reports.html with proper pagination
+# ----------------------------------------------------------------------
+echo "✍️  Writing new reports.html..."
+
+cat > "$TEMPLATE_FILE" << 'EOF'
 {% extends 'tenant/base.html' %}
 {% load fee_extras %}
 {% block title %}Financial Reports | {{ tenant.name }}{% endblock %}
@@ -568,3 +649,13 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 {% endblock %}
+EOF
+
+echo "✅ New reports.html created."
+
+echo ""
+echo "🎉 Final fix complete! Restart your Django server:"
+echo "   source venv/bin/activate"
+echo "   python3 manage.py runserver"
+echo ""
+echo "The reports page is now fully functional with pagination and correct data display."

@@ -164,8 +164,10 @@ def reports(request, schema_name):
     start_date_str = request.GET.get('start_date')
     end_date_str = request.GET.get('end_date')
     search_q = request.GET.get('search', '').strip()
-    page_num = request.GET.get('page', 1)
-
+    
+    with schema_context(schema_name):
+        total_payments_all = PaymentTransaction.objects.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+    
     # Determine date range
     if quick_filter == 'today':
         start_date = end_date = today
@@ -196,13 +198,17 @@ def reports(request, schema_name):
             end_date = today
             quick_filter = 'last6months'
     else:
-        # Default: show all time
-        start_date = date(2000, 1, 1)
-        end_date = today
-        quick_filter = 'all'
-
+        # Default to all time if any payments exist, else last 6 months
+        if total_payments_all > 0:
+            start_date = date(2000, 1, 1)
+            end_date = today
+            quick_filter = 'all'
+        else:
+            start_date = today - timedelta(days=180)
+            end_date = today
+            quick_filter = 'last6months'
+    
     with schema_context(schema_name):
-        # Base queryset for payments (filter by date range)
         payments_qs = PaymentTransaction.objects.filter(payment_date__gte=start_date, payment_date__lte=end_date)
         if search_q:
             payments_qs = payments_qs.filter(
@@ -210,24 +216,19 @@ def reports(request, schema_name):
                 Q(student__name__icontains=search_q) |
                 Q(student__roll_number__icontains=search_q)
             )
-
-        # Paginate (15 per page)
-        paginator = Paginator(payments_qs.order_by('-payment_date'), 15)
-        payments_page = paginator.get_page(page_num)
-
         total_collection = payments_qs.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
         payment_count = payments_qs.count()
-
-        # Pending fees (all time)
+        
+        # Pending fees (all time, not filtered by date)
         pending_records = FeeRecord.objects.filter(status__in=['pending', 'partial', 'overdue'])
         total_pending = sum(r.remaining for r in pending_records)
-
+        
         total_collection_all = PaymentTransaction.objects.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
         total_billed = total_collection_all + total_pending
         collection_rate = (float(total_collection_all) / float(total_billed) * 100) if total_billed > 0 else 0
-
+        
         defaulters_count = Student.objects.filter(fee_records__status__in=['pending', 'partial', 'overdue']).distinct().count()
-
+        
         # Monthly trend (last 6 months)
         monthly_data = []
         for i in range(5, -1, -1):
@@ -238,7 +239,7 @@ def reports(request, schema_name):
                 y -= 1
             total = PaymentTransaction.objects.filter(payment_date__year=y, payment_date__month=m).aggregate(Sum('amount'))['amount__sum'] or 0
             monthly_data.append({'month': f"{m}/{y}", 'amount': float(total)})
-
+        
         # Payment mode distribution (filtered by date range)
         mode_totals = {}
         for mode_code, mode_name in PaymentTransaction.PAYMENT_MODE_CHOICES:
@@ -246,7 +247,7 @@ def reports(request, schema_name):
             if total > 0:
                 mode_totals[mode_name] = float(total)
         mode_distribution = [{'name': k, 'amount': v} for k, v in mode_totals.items()]
-
+        
         # Class-wise pending fees
         class_pending = []
         grades = Student.objects.values_list('grade', flat=True).distinct().order_by('grade')
@@ -257,7 +258,7 @@ def reports(request, schema_name):
             if pending > 0:
                 class_pending.append({'grade': grade, 'pending': float(pending)})
         class_pending.sort(key=lambda x: x['pending'], reverse=True)
-
+        
         # Top defaulters (max 5)
         top_defaulters = []
         for student in Student.objects.all():
@@ -265,7 +266,7 @@ def reports(request, schema_name):
             if pending > 0:
                 top_defaulters.append({'student': student, 'pending': float(pending)})
         top_defaulters = sorted(top_defaulters, key=lambda x: x['pending'], reverse=True)[:5]
-
+        
         # Detailed defaulters list for the 'defaulters' tab
         defaulters_list = Student.objects.filter(fee_records__status__in=['pending', 'partial', 'overdue']).distinct()
         defaulters_data = []
@@ -279,7 +280,7 @@ def reports(request, schema_name):
                 'days_overdue': days_overdue
             })
         defaulters_data.sort(key=lambda x: x['days_overdue'], reverse=True)
-
+        
         context = {
             'tenant': tenant,
             'report_type': report_type,
@@ -296,7 +297,7 @@ def reports(request, schema_name):
             'class_pending': class_pending,
             'top_defaulters': top_defaulters,
             'defaulters_data': defaulters_data,
-            'payments': payments_page,          # paginated object
+            'payments': payments_qs.order_by('-payment_date'),
             'total': total_collection,
             'payment_count': payment_count,
             'logo_url': tenant.school_logo.url if tenant.school_logo else None,
@@ -657,133 +658,3 @@ def student_payments_api(request, schema_name, student_id):
             'url': f'/portal/{schema_name}/fee/receipt/{p.id}/'
         } for p in payments]
         return JsonResponse(data, safe=False)
-
-# ------------------- API: Student Search -------------------
-def student_search_api(request, schema_name):
-    q = request.GET.get('q', '')
-    with schema_context(schema_name):
-        students = Student.objects.filter(
-            Q(name__icontains=q) | Q(roll_number__icontains=q) | Q(father_name__icontains=q) | Q(father_cnic__icontains=q)
-        )[:5]
-        data = [{'id': s.id, 'name': s.name, 'roll_no': s.roll_number, 'grade': s.grade} for s in students]
-    return JsonResponse(data, safe=False)
-
-# ------------------- API: Fee Status -------------------
-@csrf_exempt
-@require_http_methods(["GET"])
-def fee_status_api(request):
-    if not request.session.get('school_admin_authenticated'):
-        return JsonResponse({'error': 'Unauthorized'}, status=401)
-    schema_name = request.session.get('school_admin_schema')
-    if not schema_name:
-        return JsonResponse({'error': 'No tenant schema'}, status=400)
-    try:
-        tenant = SchoolClient.objects.get(schema_name=schema_name)
-    except SchoolClient.DoesNotExist:
-        return JsonResponse({'error': 'Tenant not found'}, status=404)
-    with schema_context(schema_name):
-        settings, _ = SchoolFeeSettings.objects.get_or_create(pk=1)
-        last_record = FeeRecord.objects.order_by('-year', '-month').first()
-        last_gen = f"{last_record.month}/{last_record.year}" if last_record else "Never"
-        today = date.today()
-        gen_day = settings.fee_generation_day
-        from calendar import monthrange
-        if today.day <= gen_day:
-            next_date = date(today.year, today.month, min(gen_day, monthrange(today.year, today.month)[1]))
-        else:
-            next_month = today.month + 1 if today.month < 12 else 1
-            next_year = today.year + 1 if today.month == 12 else today.year
-            next_date = date(next_year, next_month, min(gen_day, monthrange(next_year, next_month)[1]))
-        return JsonResponse({'last_generation': last_gen, 'next_generation': next_date.strftime('%Y-%m-%d'), 'status': 'success'})
-
-# ------------------- API: Manual Generate (All Students) -------------------
-@csrf_exempt
-@require_http_methods(["POST"])
-def manual_generate_api(request):
-    if not request.session.get('school_admin_authenticated'):
-        return JsonResponse({'error': 'Unauthorized'}, status=401)
-    schema_name = request.session.get('school_admin_schema')
-    if not schema_name:
-        return JsonResponse({'error': 'No tenant schema'}, status=400)
-    try:
-        tenant = SchoolClient.objects.get(schema_name=schema_name)
-    except SchoolClient.DoesNotExist:
-        return JsonResponse({'error': 'Tenant not found'}, status=404)
-    with schema_context(schema_name):
-        settings, _ = SchoolFeeSettings.objects.get_or_create(pk=1)
-        today = date.today()
-        month = today.month
-        year = today.year
-        existing = FeeRecord.objects.filter(month=month, year=year)
-        if existing.exists():
-            return JsonResponse({'message': f'Fee records for {month}/{year} already exist. ({existing.count()} records)'})
-        students = Student.objects.filter(status='active')
-        if not students.exists():
-            return JsonResponse({'message': 'No active students found. Please add students first.'})
-        due_date = today + timedelta(days=settings.due_date_offset)
-        created = 0
-        skipped_no_fee = 0
-        for student in students:
-            base_fee = student.custom_fee if student.custom_fee > 0 else 0
-            if base_fee == 0:
-                fee_struct = FeeStructure.objects.filter(grade=student.grade).first()
-                if fee_struct:
-                    base_fee = fee_struct.monthly_fee
-                    student.custom_fee = base_fee
-                    student.save(update_fields=['custom_fee'])
-            if base_fee > 0:
-                obj, is_new = FeeRecord.objects.get_or_create(
-                    student=student, month=month, year=year,
-                    defaults={'amount': base_fee, 'due_date': due_date, 'status': 'pending'}
-                )
-                if is_new:
-                    created += 1
-            else:
-                skipped_no_fee += 1
-        message = f'Generated {created} fee records for {month}/{year}.'
-        if skipped_no_fee > 0:
-            message += f' Skipped {skipped_no_fee} students because no fee structure defined for their grade.'
-        return JsonResponse({'message': message, 'created': created, 'skipped': skipped_no_fee})
-
-# ------------------- API: Manual Generate for Single Student -------------------
-@csrf_exempt
-@require_http_methods(["POST"])
-def manual_generate_single_api(request):
-    if not request.session.get('school_admin_authenticated'):
-        return JsonResponse({'error': 'Unauthorized'}, status=401)
-    schema_name = request.session.get('school_admin_schema')
-    if not schema_name:
-        return JsonResponse({'error': 'No tenant schema'}, status=400)
-    student_id = request.GET.get('student_id') or request.POST.get('student_id')
-    if not student_id:
-        return JsonResponse({'error': 'Student ID required'}, status=400)
-    try:
-        tenant = SchoolClient.objects.get(schema_name=schema_name)
-    except SchoolClient.DoesNotExist:
-        return JsonResponse({'error': 'Tenant not found'}, status=404)
-    with schema_context(schema_name):
-        try:
-            student = Student.objects.get(id=student_id)
-        except Student.DoesNotExist:
-            return JsonResponse({'error': 'Student not found'}, status=404)
-        settings, _ = SchoolFeeSettings.objects.get_or_create(pk=1)
-        today = date.today()
-        month = today.month
-        year = today.year
-        if FeeRecord.objects.filter(student=student, month=month, year=year).exists():
-            return JsonResponse({'message': f'Fee already exists for {student.name} for {month}/{year}.'})
-        base_fee = student.custom_fee if student.custom_fee > 0 else 0
-        if base_fee == 0:
-            fee_struct = FeeStructure.objects.filter(grade=student.grade).first()
-            if fee_struct:
-                base_fee = fee_struct.monthly_fee
-                student.custom_fee = base_fee
-                student.save(update_fields=['custom_fee'])
-        if base_fee <= 0:
-            return JsonResponse({'error': 'No fee structure defined for this grade.'}, status=400)
-        due_date = today + timedelta(days=settings.due_date_offset)
-        FeeRecord.objects.create(
-            student=student, month=month, year=year,
-            amount=base_fee, due_date=due_date, status='pending'
-        )
-        return JsonResponse({'message': f'Fee record created for {student.name} for {month}/{year}.'})

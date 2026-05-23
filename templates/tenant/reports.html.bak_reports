@@ -267,32 +267,6 @@
     background: var(--surface-alt);
     border-radius: 0.5rem;
 }
-.pagination {
-    margin-top: 1rem;
-    text-align: center;
-    display: flex;
-    justify-content: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-}
-.page-link {
-    padding: 0.3rem 0.8rem;
-    background: var(--surface-alt);
-    border: 1px solid var(--border);
-    border-radius: 2rem;
-    text-decoration: none;
-    color: var(--text);
-}
-.page-link:hover {
-    background: var(--primary);
-    color: white;
-}
-.current-page {
-    padding: 0.3rem 0.8rem;
-    background: var(--primary);
-    color: white;
-    border-radius: 2rem;
-}
 </style>
 {% endblock %}
 
@@ -401,7 +375,7 @@
 
 <!-- Tabs -->
 <div class="tabs">
-    <a href="?type=collection&{% if start_date %}start_date={{ start_date|date:'Y-m-d' }}&end_date={{ end_date|date:'Y-m-d' }}&{% endif %}{% if quick_filter %}quick_filter={{ quick_filter }}&{% endif %}{% if search_query %}search={{ search_query }}{% endif %}" class="tab {% if report_type == 'collection' %}active{% endif %}">Collection Details</a>
+    <a href="?type=collection{% if start_date %}&start_date={{ start_date|date:'Y-m-d' }}&end_date={{ end_date|date:'Y-m-d' }}{% endif %}{% if search_query %}&search={{ search_query }}{% endif %}{% if quick_filter %}&quick_filter={{ quick_filter }}{% endif %}" class="tab {% if report_type == 'collection' %}active{% endif %}">Collection Details</a>
     <a href="?type=defaulters" class="tab {% if report_type == 'defaulters' %}active{% endif %}">Defaulters List</a>
 </div>
 
@@ -446,23 +420,11 @@
                     {% else %}
                     <p>No payments have been recorded yet. Go to <a href="{% url 'fee_collection' schema_name=tenant.schema_name %}">Fee Collection</a> to collect fees.</p>
                     {% endif %}
-                </td>
-                </tr>
+                </td></tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
-    {% if payments.has_other_pages %}
-    <div class="pagination">
-        {% if payments.has_previous %}
-            <a href="?type=collection&page={{ payments.previous_page_number }}{% if start_date %}&start_date={{ start_date|date:'Y-m-d' }}{% endif %}{% if end_date %}&end_date={{ end_date|date:'Y-m-d' }}{% endif %}{% if quick_filter %}&quick_filter={{ quick_filter }}{% endif %}{% if search_query %}&search={{ search_query }}{% endif %}" class="page-link">Previous</a>
-        {% endif %}
-        <span class="current-page">Page {{ payments.number }} of {{ payments.paginator.num_pages }}</span>
-        {% if payments.has_next %}
-            <a href="?type=collection&page={{ payments.next_page_number }}{% if start_date %}&start_date={{ start_date|date:'Y-m-d' }}{% endif %}{% if end_date %}&end_date={{ end_date|date:'Y-m-d' }}{% endif %}{% if quick_filter %}&quick_filter={{ quick_filter }}{% endif %}{% if search_query %}&search={{ search_query }}{% endif %}" class="page-link">Next</a>
-        {% endif %}
-    </div>
-    {% endif %}
 </div>
 {% else %}
 <div class="table-card">
@@ -472,9 +434,7 @@
     </div>
     <div class="table-responsive">
         <table class="data-table">
-            <thead>
-                <tr><th>Roll No</th><th>Student Name</th><th>Father Name</th><th>Class</th><th>Pending Amount</th><th>Overdue Days</th><th>Action</th></tr>
-            </thead>
+            <thead><tr><th>Roll No</th><th>Student Name</th><th>Father Name</th><th>Class</th><th>Pending Amount</th><th>Overdue Days</th><th>Action</th></tr></thead>
             <tbody>
                 {% for d in defaulters_data %}
                 <tr>
