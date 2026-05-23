@@ -1,3 +1,6 @@
+#!/bin/bash
+
+cat > templates/tenant/fee_structure.html << 'EOF'
 {% extends 'tenant/base.html' %}
 {% load static %}
 {% block title %}Fee Structure | {{ tenant.name }}{% endblock %}
@@ -119,9 +122,6 @@
     <div class="info-panel" style="margin-top: 1rem; background: var(--surface-alt); padding: 0.5rem; border-radius: 0.5rem; font-size:0.8rem; display: inline-flex; align-items: center; gap: 0.5rem;">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
         <span>{{ fee_structures|length }} fee structure(s) loaded.</span>
-        {% if debug_count != fee_structures|length %}
-        <span style="color: #f97316;">(debug: {{ debug_count }})</span>
-        {% endif %}
     </div>
     {% else %}
     <div class="info-panel" style="margin-top: 1rem; background: var(--surface-alt); padding: 0.75rem; border-radius: 0.5rem;">
@@ -240,3 +240,8 @@
     }
 </script>
 {% endblock %}
+EOF
+
+echo "✅ Fee Structure page has been updated with SVG icons and responsive table."
+echo "👉 Refresh your browser (hard refresh) to see the changes."
+EOF
