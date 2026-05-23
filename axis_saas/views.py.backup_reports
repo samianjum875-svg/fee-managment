@@ -228,15 +228,14 @@ def fee_collection(request, schema_name, student_id=None):
 def fee_receipt(request, schema_name, receipt_id):
     tenant = get_tenant(request, schema_name)
     with schema_context(schema_name):
-        payment = get_object_or_404(PaymentTransaction.objects.select_related('student'), id=receipt_id)
-        fee_records = list(payment.fee_records.all())
+        payment = get_object_or_404(PaymentTransaction, id=receipt_id)
         context = {
-            'tenant': tenant,
-            'payment': payment,
-            'fee_records': fee_records,
+            'tenant': tenant, 'payment': payment, 'fee_records': payment.fee_records.all(),
             'logo_url': tenant.school_logo.url if tenant.school_logo else None,
         }
     return render(request, 'tenant/receipt.html', context)
+
+# ------------------- Defaulters -------------------
 def defaulters(request, schema_name):
     tenant = get_tenant(request, schema_name)
     days = request.GET.get('days', '0')
