@@ -28,14 +28,14 @@
 
         [data-theme="dark"] {
             --bg: #0f172a;
-            --surface: rgba(30, 41, 59, 0.95);
-            --surface-alt: rgba(51, 65, 85, 0.9);
+            --surface: rgba(30, 41, 59, 0.9);
+            --surface-alt: rgba(51, 65, 85, 0.8);
             --text: #f1f5f9;
-            --muted: #cbd5e1;
+            --muted: #94a3b8;
             --primary: #60a5fa;
             --primary-dark: #3b82f6;
             --danger: #f87171;
-            --border: rgba(255, 255, 255, 0.15);
+            --border: rgba(255, 255, 255, 0.1);
         }
 
         body {
@@ -141,7 +141,6 @@
         }
 
         .sidebar-nav {
-    overflow-y: auto;
             flex: 1;
             padding: 1rem 0.75rem;
             display: flex;
@@ -207,7 +206,6 @@
         }
 
         .main-content {
-    min-height: 100vh;
             flex: 1;
             margin-left: 280px;
             padding: 2rem 2rem;
@@ -215,7 +213,6 @@
         }
 
         .sidebar.collapsed ~ .main-content {
-    min-height: 100vh;
             margin-left: 80px;
         }
 
@@ -316,150 +313,11 @@
                 width: 80px;
             }
             .main-content {
-    min-height: 100vh;
                 margin-left: 0;
                 padding: 1rem;
             }
         }
-    
-        /* Profile Dropdown */
-        .profile-dropdown {
-            position: relative;
-        }
-        .profile-btn {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            width: 100%;
-            background: var(--surface-alt);
-            border: 1px solid var(--border);
-            border-radius: 2rem;
-            padding: 0.5rem 0.75rem;
-            cursor: pointer;
-            color: var(--text);
-            font-weight: 500;
-            transition: var(--transition);
-        }
-        .profile-btn:hover {
-            background: var(--surface);
-        }
-        .profile-avatar svg {
-            stroke: var(--primary);
-        }
-        .profile-name {
-            flex: 1;
-            text-align: left;
-            font-size: 0.85rem;
-        }
-        .dropdown-arrow {
-            transition: transform 0.2s;
-        }
-        .dropdown-menu {
-            position: absolute;
-            bottom: 100%;
-            left: 0;
-            right: 0;
-            margin-bottom: 0.5rem;
-            background: var(--surface);
-            backdrop-filter: blur(12px);
-            border: 1px solid var(--border);
-            border-radius: 1rem;
-            padding: 0.5rem;
-            display: none;
-            z-index: 100;
-            box-shadow: var(--shadow);
-        }
-        .dropdown-menu.show {
-            display: block;
-        }
-        .dropdown-item {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 0.5rem 0.75rem;
-            border-radius: 0.75rem;
-            color: var(--text);
-            text-decoration: none;
-            font-size: 0.85rem;
-            transition: var(--transition);
-            cursor: pointer;
-            width: 100%;
-            background: none;
-            border: none;
-            font-family: inherit;
-        }
-        .dropdown-item:hover {
-            background: var(--surface-alt);
-            color: var(--primary);
-        }
-        .dropdown-item svg {
-            stroke: currentColor;
-        }
-
-        .sidebar.collapsed .profile-name,
-        .sidebar.collapsed .dropdown-arrow {
-            display: none;
-        }
-        .sidebar.collapsed .profile-btn {
-            justify-content: center;
-            padding: 0.5rem;
-        }
-        .sidebar.collapsed .profile-avatar {
-            margin: 0;
-        }
-        /* When sidebar is collapsed, dropdown opens to the right */
-        .sidebar.collapsed .profile-dropdown {
-            position: static;
-        }
-        .sidebar.collapsed .dropdown-menu {
-            position: fixed;
-            left: calc(80px + 0.5rem);
-            bottom: auto;
-            top: auto;
-            transform: translateY(-50%);
-            margin-top: 0;
-            width: 200px;
-        }
-        /* Adjust for small screens */
-        @media (max-width: 768px) {
-            .sidebar.collapsed .dropdown-menu {
-                left: 80px;
-            }
-        }
-        /* When sidebar is collapsed, dropdown opens to the right */
-        .sidebar.collapsed .profile-dropdown {
-            position: static;
-        }
-        .sidebar.collapsed .dropdown-menu {
-            position: fixed;
-            left: calc(80px + 0.5rem);
-            top: auto;
-            transform: none;
-            margin-top: 0;
-            width: 200px;
-        }
-        /* Dark mode enhancements */
-        [data-theme="dark"] .card,
-        [data-theme="dark"] .filter-card,
-        [data-theme="dark"] .table-card,
-        [data-theme="dark"] .chart-card,
-        [data-theme="dark"] .stat-card,
-        [data-theme="dark"] .student-panel,
-        [data-theme="dark"] .history-card {
-            background: rgba(30, 41, 59, 0.98);
-            border-color: rgba(255, 255, 255, 0.2);
-        }
-        [data-theme="dark"] .data-table th {
-            background: rgba(51, 65, 85, 0.95);
-            color: #e2e8f0;
-        }
-        [data-theme="dark"] .data-table td {
-            border-bottom-color: rgba(255, 255, 255, 0.1);
-        }
-        [data-theme="dark"] .profile-btn {
-            background: rgba(51, 65, 85, 0.9);
-        }
-</style>
+    </style>
     {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -501,36 +359,21 @@
                     <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
                     <span>Fee Structure</span>
                 </a>
+                <a href="{% url 'fee_settings' schema_name=tenant.schema_name %}" class="nav-item">
+                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    <span>Settings</span>
+                </a>
             </nav>
             <div class="sidebar-footer">
-    <div class="profile-dropdown">
-        <button class="profile-btn" id="profileBtn">
-            <div class="profile-avatar">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+                <button onclick="toggleTheme()" class="theme-toggle">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                    <span class="btn-text">Theme</span>
+                </button>
+                <a href="{% url 'tenant_logout' schema_name=tenant.schema_name %}" class="logout-btn">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75"/></svg>
+                    <span class="btn-text">Logout</span>
+                </a>
             </div>
-            <span class="profile-name">Admin</span>
-            <svg class="dropdown-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M6 9l6 6 6-6"/>
-            </svg>
-        </button>
-        <div class="dropdown-menu" id="profileDropdown">
-            <button onclick="toggleTheme()" class="dropdown-item">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
-                <span>Theme</span>
-            </button>
-            <a href="{% url 'fee_settings' schema_name=tenant.schema_name %}" class="dropdown-item">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                <span>Settings</span>
-            </a>
-            <a href="{% url 'tenant_logout' schema_name=tenant.schema_name %}" class="dropdown-item">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75"/></svg>
-                <span>Logout</span>
-            </a>
-        </div>
-    </div>
-</div>
         </aside>
         <main class="main-content" id="mainContent">
             {% include "tenant/messages.html" %}
@@ -550,27 +393,8 @@
             const svg = toggleBtn.querySelector('svg');
             if (isCollapsed) {
                 svg.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7"/>';
-                // Update profile button for collapsed state
-                const profileBtn = document.getElementById('profileBtn');
-                if (profileBtn) {
-                    const nameSpan = profileBtn.querySelector('.profile-name');
-                    const arrowSvg = profileBtn.querySelector('.dropdown-arrow');
-                    if (nameSpan) nameSpan.style.display = 'none';
-                    if (arrowSvg) arrowSvg.style.display = 'none';
-                }
-                // Close dropdown when collapsing to avoid positioning issues
-                const dropdown = document.getElementById('profileDropdown');
-                if (dropdown) dropdown.classList.remove('show');
             } else {
                 svg.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>';
-                // Update profile button for expanded state
-                const profileBtn = document.getElementById('profileBtn');
-                if (profileBtn) {
-                    const nameSpan = profileBtn.querySelector('.profile-name');
-                    const arrowSvg = profileBtn.querySelector('.dropdown-arrow');
-                    if (nameSpan) nameSpan.style.display = '';
-                    if (arrowSvg) arrowSvg.style.display = '';
-                }
             }
         }
         toggleBtn.addEventListener('click', toggleSidebar);
@@ -585,35 +409,6 @@
         }
         if (sidebar.classList.contains('collapsed')) {
             toggleBtn.querySelector('svg').innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7"/>';
-            const profileBtn = document.getElementById('profileBtn');
-            if (profileBtn) {
-                const nameSpan = profileBtn.querySelector('.profile-name');
-                const arrowSvg = profileBtn.querySelector('.dropdown-arrow');
-                if (nameSpan) nameSpan.style.display = 'none';
-                if (arrowSvg) arrowSvg.style.display = 'none';
-            }
-        }
-    </script>
-
-    <script>
-        // Profile dropdown functionality
-        const profileBtn = document.getElementById('profileBtn');
-        const profileDropdown = document.getElementById('profileDropdown');
-        if (profileBtn && profileDropdown) {
-            profileBtn.addEventListener('click', function(e) {
-                e.stopPropagation();
-                profileDropdown.classList.toggle('show');
-            });
-            // Close dropdown when clicking outside
-            document.addEventListener('click', function(e) {
-                if (!profileBtn.contains(e.target) && !profileDropdown.contains(e.target)) {
-                    profileDropdown.classList.remove('show');
-                }
-            });
-            // Prevent dropdown from closing when clicking inside
-            profileDropdown.addEventListener('click', function(e) {
-                e.stopPropagation();
-            });
         }
     </script>
 </body>

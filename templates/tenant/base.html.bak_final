@@ -141,7 +141,6 @@
         }
 
         .sidebar-nav {
-    overflow-y: auto;
             flex: 1;
             padding: 1rem 0.75rem;
             display: flex;
@@ -207,7 +206,6 @@
         }
 
         .main-content {
-    min-height: 100vh;
             flex: 1;
             margin-left: 280px;
             padding: 2rem 2rem;
@@ -215,7 +213,6 @@
         }
 
         .sidebar.collapsed ~ .main-content {
-    min-height: 100vh;
             margin-left: 80px;
         }
 
@@ -316,7 +313,6 @@
                 width: 80px;
             }
             .main-content {
-    min-height: 100vh;
                 margin-left: 0;
                 padding: 1rem;
             }
@@ -406,60 +402,7 @@
         }
         .sidebar.collapsed .profile-avatar {
             margin: 0;
-        }
-        /* When sidebar is collapsed, dropdown opens to the right */
-        .sidebar.collapsed .profile-dropdown {
-            position: static;
-        }
-        .sidebar.collapsed .dropdown-menu {
-            position: fixed;
-            left: calc(80px + 0.5rem);
-            bottom: auto;
-            top: auto;
-            transform: translateY(-50%);
-            margin-top: 0;
-            width: 200px;
-        }
-        /* Adjust for small screens */
-        @media (max-width: 768px) {
-            .sidebar.collapsed .dropdown-menu {
-                left: 80px;
-            }
-        }
-        /* When sidebar is collapsed, dropdown opens to the right */
-        .sidebar.collapsed .profile-dropdown {
-            position: static;
-        }
-        .sidebar.collapsed .dropdown-menu {
-            position: fixed;
-            left: calc(80px + 0.5rem);
-            top: auto;
-            transform: none;
-            margin-top: 0;
-            width: 200px;
-        }
-        /* Dark mode enhancements */
-        [data-theme="dark"] .card,
-        [data-theme="dark"] .filter-card,
-        [data-theme="dark"] .table-card,
-        [data-theme="dark"] .chart-card,
-        [data-theme="dark"] .stat-card,
-        [data-theme="dark"] .student-panel,
-        [data-theme="dark"] .history-card {
-            background: rgba(30, 41, 59, 0.98);
-            border-color: rgba(255, 255, 255, 0.2);
-        }
-        [data-theme="dark"] .data-table th {
-            background: rgba(51, 65, 85, 0.95);
-            color: #e2e8f0;
-        }
-        [data-theme="dark"] .data-table td {
-            border-bottom-color: rgba(255, 255, 255, 0.1);
-        }
-        [data-theme="dark"] .profile-btn {
-            background: rgba(51, 65, 85, 0.9);
-        }
-</style>
+        }</style>
     {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -558,9 +501,6 @@
                     if (nameSpan) nameSpan.style.display = 'none';
                     if (arrowSvg) arrowSvg.style.display = 'none';
                 }
-                // Close dropdown when collapsing to avoid positioning issues
-                const dropdown = document.getElementById('profileDropdown');
-                if (dropdown) dropdown.classList.remove('show');
             } else {
                 svg.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>';
                 // Update profile button for expanded state
