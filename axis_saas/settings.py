@@ -7,15 +7,15 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-fallback-for-build-only')
-DEBUG = env('DEBUG')
+DEBUG = env('DEBUG', default=False)
 
-ALLOWED_HOSTS = ['localhost', '.localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['*']
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',   # WhiteNoise
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django_tenants.middleware.main.TenantMainMiddleware',
-#    'axis_saas.middleware_session.SafeSessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -44,10 +44,22 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'axis_saas.wsgi.application'
 
-DATABASES = {
-    'default': env.db()
-}
-DATABASES['default']['ENGINE'] = 'django_tenants.postgresql_backend'
+# Database – must use django_tenants postgresql backend
+if os.environ.get('DATABASE_URL'):
+    import dj_database_url
+    DATABASES = {
+        'default': dj_database_url.config(conn_max_age=600, ssl_require=True)
+    }
+    # Force the correct engine
+    DATABASES['default']['ENGINE'] = 'django_tenants.postgresql_backend'
+else:
+    # Fallback for build time (dummy, should never be used at runtime)
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django_tenants.postgresql_backend',
+            'NAME': 'dummy',
+        }
+    }
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
@@ -62,17 +74,17 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = 'static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATIC_ROOT = '/data/staticfiles'
+MEDIA_ROOT = '/data/media'
 MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 LOGIN_URL = 'tenant_login'
 LOGIN_REDIRECT_URL = 'dashboard'
 LOGOUT_REDIRECT_URL = 'tenant_login'
 
-# ==============================================================================
-# MULTI-TENANT CONFIGURATION
-# ==============================================================================
+# Multi-tenant
 SHARED_APPS = [
     'django_tenants',
     'axis_saas',
@@ -94,13 +106,7 @@ TENANT_APPS = [
     'django.contrib.staticfiles',
 ]
 
-INSTALLED_APPS = []
-for app in SHARED_APPS:
-    if app not in INSTALLED_APPS:
-        INSTALLED_APPS.append(app)
-for app in TENANT_APPS:
-    if app not in INSTALLED_APPS:
-        INSTALLED_APPS.append(app)
+INSTALLED_APPS = SHARED_APPS + [app for app in TENANT_APPS if app not in SHARED_APPS]
 
 TENANT_MODEL = 'axis_saas.SchoolClient'
 TENANT_DOMAIN_MODEL = 'axis_saas.SchoolDomain'
@@ -114,42 +120,11 @@ SESSION_COOKIE_DOMAIN = None
 CSRF_COOKIE_DOMAIN = None
 SESSION_ENGINE = 'django.contrib.sessions.backends.file'
 SESSION_SAVE_EVERY_REQUEST = False
-CSRF_TRUSTED_ORIGINS = ['http://localhost:8000', 'http://127.0.0.1:8000', 'http://*.localhost:8000']
-CSRF_COOKIE_HTTPONLY = False
-SESSION_COOKIE_HTTPONLY = True
-CSRF_USE_SESSIONS = False
-SESSION_EXPIRE_AT_BROWSER_CLOSE = True
-SECURE_BROWSER_XSS_FILTER = True
-SECURE_CONTENT_TYPE_NOSNIFF = True
-X_FRAME_OPTIONS = 'DENY'
+CSRF_TRUSTED_ORIGINS = ['https://*.hf.space', 'http://localhost:8000']
 SESSION_COOKIE_PATH = '/'
 SESSION_FILE_PATH = '/tmp/django_sessions/'
 
-# ---------- PRODUCTION OVERRIDES (added by deploy_prep.sh) ----------
-import dj_database_url
-import os
-
-DEBUG = False
-
-ALLOWED_HOSTS = ['*']   # HF Space ka domain automatically allow ho jayega
-
-# Static files (WhiteNoise)
-STATIC_URL = '/static/'
-STATIC_ROOT = os.path.join('/data', 'staticfiles')   # HF persistent storage
-MEDIA_ROOT = os.path.join('/data', 'media')
-MEDIA_URL = '/media/'
-
-# WhiteNoise middleware (must be high up)
-MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
-
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-
-# Database from environment variable
-DATABASES['default'] = dj_database_url.config(conn_max_age=600, ssl_require=True)
-
-# Session & security (adjust as needed)
-CSRF_TRUSTED_ORIGINS = ['https://*.hf.space', 'http://localhost:8000']
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
-# --------------------------------------------------------------------
+# For production, you may want to enable these:
+# CSRF_COOKIE_SECURE = True
+# SESSION_COOKIE_SECURE = True
+# SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
