@@ -1,62 +1,541 @@
 #!/usr/bin/env python3
 """
-Add missing gym views to import in public_urls.py.
-Run: python3 fix_gym_imports.py
+Replace gym_attendance.html with a modern, feature-rich version.
+Run: python3 fix_gym_attendance_ui.py
 """
 
-import re
 from pathlib import Path
 
-PUBLIC_URLS = Path("axis_saas/public_urls.py")
+TEMPLATE_PATH = Path("templates/tenant/gym_attendance.html")
+BACKUP_PATH = TEMPLATE_PATH.with_suffix(".html.bak")
+
+NEW_TEMPLATE = '''{% extends 'tenant/base.html' %}
+{% block title %}Attendance | {{ tenant.name }}{% endblock %}
+{% block body %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Daily Attendance</h1>
+        <p class="page-desc">Check-in / Check-out members and track attendance</p>
+    </div>
+    <div class="header-stats">
+        <div class="stat-badge">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+            <span>Today: <strong>{{ checkins_today|length }}</strong> check-ins</span>
+        </div>
+        <button class="btn-refresh" id="refreshBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            Refresh
+        </button>
+    </div>
+</div>
+
+<!-- Check-in Form -->
+<div class="checkin-card">
+    <div class="card-header">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <h3>Quick Check-in</h3>
+    </div>
+    <form method="post" class="checkin-form" id="checkinForm">
+        {% csrf_token %}
+        <div class="form-row">
+            <div class="form-field">
+                <label>Customer</label>
+                <div class="searchable-dropdown">
+                    <input type="text" id="customerSearch" placeholder="Type to search customer..." class="search-input" autocomplete="off">
+                    <select name="customer" id="customerSelect" class="customer-select" style="display:none;">
+                        {{ form.customer }}
+                    </select>
+                </div>
+            </div>
+            <div class="form-field">
+                <label>Check-out (optional)</label>
+                {{ form.check_out }}
+            </div>
+            <div class="form-field">
+                <label>Notes</label>
+                {{ form.notes }}
+            </div>
+            <div class="form-field submit-field">
+                <button type="submit" class="btn-primary">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 13l4 4L19 7"/></svg>
+                    Check In
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Two Column Layout -->
+<div class="attendance-grid">
+    <!-- Today's Check-ins -->
+    <div class="attendance-card">
+        <div class="card-header">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+            <h3>Today's Check-ins</h3>
+            <div class="search-wrapper">
+                <input type="text" id="todaySearch" placeholder="Search customer..." class="table-search">
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="data-table" id="todayTable">
+                <thead>
+                    <tr>
+                        <th>Customer</th>
+                        <th>Check-in Time</th>
+                        <th>Check-out</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in checkins_today %}
+                    <tr data-customer-name="{{ a.customer.name|lower }}">
+                        <td><strong>{{ a.customer.name }}</strong><br><small>{{ a.customer.phone }}</small></td>
+                        <td>{{ a.check_in|time:"H:i" }}</td>
+                        <td>{% if a.check_out %}{{ a.check_out|time:"H:i" }}{% else %}—{% endif %}</td>
+                        <td>{% if not a.check_out %}<button class="btn-checkout" data-id="{{ a.customer.id }}">Check-out</button>{% endif %}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4" class="empty-row">No check-ins today</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Last 7 Days Attendance -->
+    <div class="attendance-card">
+        <div class="card-header">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v18h18"/><path d="M18 17V9M12 17V5M6 17v-3"/></svg>
+            <h3>Last 7 Days Attendance</h3>
+            <div class="search-wrapper">
+                <input type="text" id="recentSearch" placeholder="Search customer..." class="table-search">
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="data-table" id="recentTable">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Customer</th>
+                        <th>Check-in</th>
+                        <th>Check-out</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in recent_attendance %}
+                    <tr data-customer-name="{{ a.customer.name|lower }}">
+                        <td>{{ a.date|date:"Y-m-d" }}</td>
+                        <td><strong>{{ a.customer.name }}</strong><br><small>{{ a.customer.phone }}</small></td>
+                        <td>{{ a.check_in|time:"H:i" }}</td>
+                        <td>{{ a.check_out|time:"H:i"|default:"-" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4" class="empty-row">No recent attendance</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Attendance Trend Chart -->
+<div class="chart-card">
+    <div class="card-header">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v18h18"/><path d="M18 17V9M12 17V5M6 17v-3"/></svg>
+        <h3>Weekly Attendance Trend</h3>
+    </div>
+    <canvas id="attendanceTrend" height="100"></canvas>
+</div>
+
+<style>
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+.page-title {
+    font-size: 1.8rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    margin-bottom: 0.25rem;
+}
+.page-desc {
+    color: var(--muted);
+}
+.header-stats {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+.stat-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: var(--surface-alt);
+    border-radius: 2rem;
+    border: 1px solid var(--border);
+    font-size: 0.85rem;
+}
+.btn-refresh {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 2rem;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s;
+}
+.btn-refresh:hover {
+    background: var(--surface);
+}
+.checkin-card, .attendance-card, .chart-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    box-shadow: var(--shadow-sm);
+}
+.card-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+.card-header h3 {
+    flex: 1;
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0;
+}
+.search-wrapper {
+    width: 200px;
+}
+.table-search {
+    width: 100%;
+    padding: 0.4rem 0.75rem;
+    border-radius: 2rem;
+    border: 1px solid var(--border);
+    background: var(--surface-alt);
+    font-size: 0.8rem;
+}
+.checkin-form .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr auto;
+    gap: 1rem;
+    align-items: flex-end;
+}
+.form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+.form-field label {
+    font-weight: 600;
+    font-size: 0.8rem;
+}
+.form-field input, .form-field select {
+    padding: 0.6rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--border);
+    background: var(--surface-alt);
+    width: 100%;
+}
+.submit-field {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+}
+.btn-primary {
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 2rem;
+    padding: 0.6rem 1.2rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s;
+}
+.btn-primary:hover {
+    background: var(--primary-dark);
+    transform: translateY(-1px);
+}
+.btn-checkout {
+    background: var(--danger);
+    color: white;
+    border: none;
+    border-radius: 2rem;
+    padding: 0.3rem 0.8rem;
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: 0.2s;
+}
+.btn-checkout:hover {
+    opacity: 0.9;
+    transform: scale(0.98);
+}
+.attendance-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+.table-responsive {
+    overflow-x: auto;
+}
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.data-table th, .data-table td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+.data-table th {
+    background: var(--surface-alt);
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+.empty-row {
+    text-align: center;
+    padding: 2rem;
+    color: var(--muted);
+}
+.searchable-dropdown {
+    position: relative;
+}
+.customer-select {
+    position: absolute;
+    width: 100%;
+    max-height: 200px;
+    overflow-y: auto;
+    display: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    z-index: 100;
+}
+.customer-select option {
+    padding: 0.5rem;
+    cursor: pointer;
+}
+.customer-select option:hover {
+    background: var(--primary);
+    color: white;
+}
+@media (max-width: 768px) {
+    .checkin-form .form-row {
+        grid-template-columns: 1fr;
+    }
+    .attendance-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Helper to get CSRF token
+function getCookie(name) {
+    let value = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                value = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return value;
+}
+const csrfToken = getCookie('csrftoken');
+
+// Refresh page
+document.getElementById('refreshBtn')?.addEventListener('click', () => location.reload());
+
+// Search functionality for Today's table
+const todaySearch = document.getElementById('todaySearch');
+if (todaySearch) {
+    todaySearch.addEventListener('keyup', function() {
+        const filter = this.value.toLowerCase();
+        const rows = document.querySelectorAll('#todayTable tbody tr');
+        rows.forEach(row => {
+            const name = row.getAttribute('data-customer-name') || '';
+            row.style.display = name.includes(filter) ? '' : 'none';
+        });
+    });
+}
+
+// Search for Recent table
+const recentSearch = document.getElementById('recentSearch');
+if (recentSearch) {
+    recentSearch.addEventListener('keyup', function() {
+        const filter = this.value.toLowerCase();
+        const rows = document.querySelectorAll('#recentTable tbody tr');
+        rows.forEach(row => {
+            const name = row.getAttribute('data-customer-name') || '';
+            row.style.display = name.includes(filter) ? '' : 'none';
+        });
+    });
+}
+
+// Check-out buttons
+document.querySelectorAll('.btn-checkout').forEach(btn => {
+    btn.addEventListener('click', async function() {
+        const customerId = this.dataset.id;
+        if (!confirm('Check out this customer?')) return;
+        this.disabled = true;
+        this.innerText = '...';
+        try {
+            const resp = await fetch('/api/gym/checkout/', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `customer_id=${customerId}`
+            });
+            const data = await resp.json();
+            if (data.message) alert(data.message);
+            location.reload();
+        } catch(e) {
+            alert('Error: ' + e.message);
+            this.disabled = false;
+            this.innerText = 'Check-out';
+        }
+    });
+});
+
+// Customer search dropdown for check-in form
+const customerSearchInput = document.getElementById('customerSearch');
+const customerSelect = document.getElementById('customerSelect');
+if (customerSearchInput && customerSelect) {
+    // Populate dropdown from select options
+    const options = Array.from(customerSelect.options);
+    const dropdownDiv = document.createElement('div');
+    dropdownDiv.className = 'customer-select';
+    dropdownDiv.style.display = 'none';
+    customerSearchInput.parentNode.appendChild(dropdownDiv);
+    
+    function updateDropdown(filter = '') {
+        dropdownDiv.innerHTML = '';
+        const filtered = options.filter(opt => opt.text.toLowerCase().includes(filter.toLowerCase()) && opt.value);
+        if (filtered.length === 0) {
+            const noOpt = document.createElement('div');
+            noOpt.textContent = 'No customers found';
+            noOpt.style.padding = '0.5rem';
+            noOpt.style.color = 'var(--muted)';
+            dropdownDiv.appendChild(noOpt);
+        } else {
+            filtered.forEach(opt => {
+                const item = document.createElement('div');
+                item.textContent = opt.text;
+                item.style.padding = '0.5rem';
+                item.style.cursor = 'pointer';
+                item.addEventListener('click', () => {
+                    customerSearchInput.value = opt.text;
+                    customerSelect.value = opt.value;
+                    dropdownDiv.style.display = 'none';
+                });
+                dropdownDiv.appendChild(item);
+            });
+        }
+        dropdownDiv.style.display = 'block';
+    }
+    
+    customerSearchInput.addEventListener('input', (e) => {
+        updateDropdown(e.target.value);
+    });
+    customerSearchInput.addEventListener('focus', () => {
+        updateDropdown(customerSearchInput.value);
+    });
+    document.addEventListener('click', (e) => {
+        if (!dropdownDiv.contains(e.target) && e.target !== customerSearchInput) {
+            dropdownDiv.style.display = 'none';
+        }
+    });
+    // Set initial hidden select value when form submits
+    const checkinForm = document.getElementById('checkinForm');
+    checkinForm.addEventListener('submit', (e) => {
+        if (!customerSelect.value && customerSearchInput.value) {
+            // Try to find matching option
+            const match = options.find(opt => opt.text === customerSearchInput.value);
+            if (match) customerSelect.value = match.value;
+            else {
+                e.preventDefault();
+                alert('Please select a valid customer from the list');
+            }
+        }
+    });
+}
+
+// Attendance Trend Chart
+const ctx = document.getElementById('attendanceTrend')?.getContext('2d');
+if (ctx) {
+    // Get last 7 days check-in counts from the recent table (or from server-side data)
+    // We'll extract from the table
+    const last7Days = {};
+    const rows = document.querySelectorAll('#recentTable tbody tr');
+    rows.forEach(row => {
+        const dateCell = row.cells[0];
+        if (dateCell) {
+            const date = dateCell.innerText;
+            last7Days[date] = (last7Days[date] || 0) + 1;
+        }
+    });
+    const dates = Object.keys(last7Days).sort().slice(-7);
+    const counts = dates.map(d => last7Days[d]);
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: dates,
+            datasets: [{
+                label: 'Check-ins',
+                data: counts,
+                borderColor: '#3b82f6',
+                backgroundColor: 'rgba(59,130,246,0.1)',
+                fill: true,
+                tension: 0.3
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: true }
+    });
+}
+</script>
+{% endblock %}
+'''
 
 def main():
-    if not PUBLIC_URLS.exists():
-        print("❌ public_urls.py not found")
+    if not TEMPLATE_PATH.exists():
+        print(f"❌ Template not found: {TEMPLATE_PATH}")
         return
 
-    with open(PUBLIC_URLS, "r") as f:
-        content = f.read()
-
-    # Find the line that starts with "from .views import"
-    pattern = r'(from \.views import )(.*)'
-    match = re.search(pattern, content)
-    if not match:
-        print("❌ Could not find import line")
-        return
-
-    prefix = match.group(1)
-    existing_imports = match.group(2).strip()
-    # Split existing imports (they may be separated by commas and spaces)
-    import_list = [name.strip() for name in existing_imports.split(',') if name.strip()]
-
-    # List of gym views that need to be imported (all that are used in public_urls.py)
-    required_views = [
-        'gym_dashboard', 'gym_customer_list', 'gym_customer_add', 'gym_customer_edit',
-        'gym_customer_profile', 'gym_attendance', 'gym_payment', 'gym_reports', 'gym_settings'
-    ]
-
-    # Add missing ones
-    for view in required_views:
-        if view not in import_list:
-            import_list.append(view)
-
-    # Rebuild the import line
-    new_import_line = prefix + ', '.join(sorted(import_list)) + '\n'
-
-    # Replace the old line
-    new_content = re.sub(pattern, new_import_line.rstrip(), content)
-
-    # Backup
-    backup = PUBLIC_URLS.with_suffix('.py.bak4')
+    # Backup original
     import shutil
-    shutil.copy2(PUBLIC_URLS, backup)
-    print(f"📁 Backup saved: {backup}")
+    shutil.copy2(TEMPLATE_PATH, BACKUP_PATH)
+    print(f"📁 Backup saved: {BACKUP_PATH}")
 
-    with open(PUBLIC_URLS, "w") as f:
-        f.write(new_content)
+    with open(TEMPLATE_PATH, "w", encoding="utf-8") as f:
+        f.write(NEW_TEMPLATE)
 
-    print("✅ Added missing gym views to import.")
-    print("\n🎉 Now run: python3 manage.py runserver")
+    print("✅ gym_attendance.html replaced with modern UI!")
+    print("\n🎉 Now refresh your browser and enjoy the new attendance page.")
+    print("   Features: search, better check-out, attendance chart, and responsive design.")
 
 if __name__ == "__main__":
     main()
