@@ -7,7 +7,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 
 from .models import SchoolClient
 
-from .views import add_student, dashboard, debug_payments_api, defaulters, edit_student, family_payment, fee_collection, fee_receipt, fee_settings, fee_status_api, fee_structure, gym_attendance, gym_checkin_api, gym_checkout_api, gym_customer_add, gym_customer_edit, gym_customer_list, gym_customer_profile, gym_dashboard, gym_payment, gym_receipt, gym_reports, gym_settings, manual_generate_api, manual_generate_single_api, reports, settings, student_fee_records_api, student_list, student_payments_api, student_profile, student_search_api
+from .views import add_student, dashboard, debug_payments_api, defaulters, edit_student, family_payment, fee_collection, fee_receipt, fee_settings, fee_status_api, fee_structure, gym_checkin_api, gym_checkout_api, gym_receipt, manual_generate_api, manual_generate_single_api, reports, settings, student_fee_records_api, student_list, student_payments_api, student_profile, student_search_api
 
 def saas_homepage(request):
     return HttpResponse('''
@@ -106,16 +106,6 @@ add_student_view = portal_wrapper(login_required_for_schema(add_student))
 edit_student_view = portal_wrapper(login_required_for_schema(edit_student))
 student_fee_records_api_view = portal_wrapper(login_required_for_schema(student_fee_records_api))
 student_payments_api_view = portal_wrapper(login_required_for_schema(student_payments_api))
-gym_dashboard_view = portal_wrapper(login_required_for_schema(gym_dashboard))
-gym_customer_list_view = portal_wrapper(login_required_for_schema(gym_customer_list))
-gym_customer_add_view = portal_wrapper(login_required_for_schema(gym_customer_add))
-gym_customer_edit_view = portal_wrapper(login_required_for_schema(gym_customer_edit))
-gym_customer_profile_view = portal_wrapper(login_required_for_schema(gym_customer_profile))
-gym_attendance_view = portal_wrapper(login_required_for_schema(gym_attendance))
-gym_payment_view = portal_wrapper(login_required_for_schema(gym_payment))
-gym_reports_view = portal_wrapper(login_required_for_schema(gym_reports))
-gym_settings_view = portal_wrapper(login_required_for_schema(gym_settings))
-
 
 urlpatterns = [
     path('api/debug-payments/', debug_payments_api, name='debug_payments_api'),
@@ -155,18 +145,6 @@ urlpatterns = [
     path('api/gym/checkin/', gym_checkin_api, name='gym_checkin_api'),
     path('api/gym/checkout/', gym_checkout_api, name='gym_checkout_api'),
     path('portal/<slug:schema_name>/gym/receipt/<int:receipt_id>/', gym_receipt, name='gym_receipt'),
-
-    # Gym routes
-    path('portal/<slug:schema_name>/gym/', gym_dashboard_view, name='gym_dashboard'),
-    path('portal/<slug:schema_name>/gym/customers/', gym_customer_list_view, name='gym_customer_list'),
-    path('portal/<slug:schema_name>/gym/customers/add/', gym_customer_add_view, name='gym_customer_add'),
-    path('portal/<slug:schema_name>/gym/customers/edit/<int:customer_id>/', gym_customer_edit_view, name='gym_customer_edit'),
-    path('portal/<slug:schema_name>/gym/customers/<int:customer_id>/', gym_customer_profile_view, name='gym_customer_profile'),
-    path('portal/<slug:schema_name>/gym/attendance/', gym_attendance_view, name='gym_attendance'),
-    path('portal/<slug:schema_name>/gym/payments/', gym_payment_view, name='gym_payment'),
-    path('portal/<slug:schema_name>/gym/payments/<int:customer_id>/', gym_payment_view, name='gym_payment'),
-    path('portal/<slug:schema_name>/gym/reports/', gym_reports_view, name='gym_reports'),
-    path('portal/<slug:schema_name>/gym/settings/', gym_settings_view, name='gym_settings'),
 ]
 
 if django_settings.DEBUG:

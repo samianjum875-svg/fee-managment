@@ -1,72 +1,62 @@
 #!/usr/bin/env python3
 """
-Add tenant_type field to SchoolClient admin form and fieldsets.
-Run: python3 add_tenant_type_final.py
+Add missing gym views to import in public_urls.py.
+Run: python3 fix_gym_imports.py
 """
 
+import re
 from pathlib import Path
-import shutil
 
-ADMIN_FILE = Path("axis_saas/admin.py")
+PUBLIC_URLS = Path("axis_saas/public_urls.py")
 
 def main():
-    if not ADMIN_FILE.exists():
-        print("❌ admin.py not found")
+    if not PUBLIC_URLS.exists():
+        print("❌ public_urls.py not found")
         return
 
-    # Backup
-    backup = ADMIN_FILE.with_suffix('.py.bak2')
-    shutil.copy2(ADMIN_FILE, backup)
-    print(f"📁 Backup saved: {backup}")
-
-    with open(ADMIN_FILE, "r") as f:
+    with open(PUBLIC_URLS, "r") as f:
         content = f.read()
 
-    # 1. Add 'tenant_type' to SchoolClientForm.Meta.fields
-    # Find the fields list and add tenant_type after 'is_active'
-    # Look for: fields = ['name', 'schema_name', 'admin_username', 'admin_password', 'is_active']
-    old_fields_line = "fields = ['name', 'schema_name', 'admin_username', 'admin_password', 'is_active']"
-    new_fields_line = "fields = ['name', 'schema_name', 'tenant_type', 'admin_username', 'admin_password', 'is_active']"
-    if old_fields_line in content:
-        content = content.replace(old_fields_line, new_fields_line)
-        print("✅ Added 'tenant_type' to form fields.")
-    else:
-        # Fallback: regex
-        import re
-        pattern = r"(fields\s*=\s*\[)(.*?)(\])"
-        def repl(m):
-            fields = m.group(2)
-            if "'tenant_type'" not in fields and '"tenant_type"' not in fields:
-                # Insert after 'schema_name' or at appropriate place
-                # Simple: add at beginning or end? Better add after 'schema_name'
-                if "'schema_name'" in fields:
-                    fields = fields.replace("'schema_name'", "'schema_name', 'tenant_type'")
-                else:
-                    fields = fields.rstrip() + ", 'tenant_type'"
-            return m.group(1) + fields + m.group(3)
-        content = re.sub(pattern, repl, content)
-        print("✅ Added 'tenant_type' to form fields (regex fallback).")
+    # Find the line that starts with "from .views import"
+    pattern = r'(from \.views import )(.*)'
+    match = re.search(pattern, content)
+    if not match:
+        print("❌ Could not find import line")
+        return
 
-    # 2. Add tenant_type to fieldsets in SchoolClientAdmin
-    # We'll add a new fieldset for Tenant Type after Master Identity Matrix
-    # Find the fieldsets definition
-    fieldsets_pattern = r"(fieldsets\s*=\s*\(\s*\([^)]+\)\s*,\s*\([^)]+\)\s*,\s*\([^)]+\)\s*\))"
-    # Better to just add a new tuple before the last one
-    # Look for the line with 'Generated Access Routes' and insert before it
-    old_fieldset_part = "('Generated Access Routes', {"
-    new_fieldset = "        ('Tenant Type', {\n            'fields': ('tenant_type',),\n        }),\n"
-    if old_fieldset_part in content:
-        content = content.replace(old_fieldset_part, new_fieldset + "        " + old_fieldset_part)
-        print("✅ Added Tenant Type fieldset in admin.")
-    else:
-        print("⚠️ Could not find 'Generated Access Routes' fieldset, tenant_type might not appear in form layout.")
+    prefix = match.group(1)
+    existing_imports = match.group(2).strip()
+    # Split existing imports (they may be separated by commas and spaces)
+    import_list = [name.strip() for name in existing_imports.split(',') if name.strip()]
 
-    # Write back
-    with open(ADMIN_FILE, "w") as f:
-        f.write(content)
+    # List of gym views that need to be imported (all that are used in public_urls.py)
+    required_views = [
+        'gym_dashboard', 'gym_customer_list', 'gym_customer_add', 'gym_customer_edit',
+        'gym_customer_profile', 'gym_attendance', 'gym_payment', 'gym_reports', 'gym_settings'
+    ]
 
-    print("\n🎉 Done! Now refresh the admin page (or restart server).")
-    print("You will see 'Tenant type' dropdown in SchoolClient add/edit form.")
+    # Add missing ones
+    for view in required_views:
+        if view not in import_list:
+            import_list.append(view)
+
+    # Rebuild the import line
+    new_import_line = prefix + ', '.join(sorted(import_list)) + '\n'
+
+    # Replace the old line
+    new_content = re.sub(pattern, new_import_line.rstrip(), content)
+
+    # Backup
+    backup = PUBLIC_URLS.with_suffix('.py.bak4')
+    import shutil
+    shutil.copy2(PUBLIC_URLS, backup)
+    print(f"📁 Backup saved: {backup}")
+
+    with open(PUBLIC_URLS, "w") as f:
+        f.write(new_content)
+
+    print("✅ Added missing gym views to import.")
+    print("\n🎉 Now run: python3 manage.py runserver")
 
 if __name__ == "__main__":
     main()
