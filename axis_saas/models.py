@@ -163,7 +163,7 @@ class PaymentTransaction(models.Model):
     def __str__(self):
         return f"{self.receipt_number} - {self.student.name} - ₹{self.amount}"
 
-# ------------------- School Fee Settings (SIMPLIFIED - Single record per tenant) -------------------
+# ------------------- School Fee Settings -------------------
 class SchoolFeeSettings(models.Model):
     fee_generation_day = models.PositiveSmallIntegerField(default=1, help_text="Day of month (1-31)")
     due_date_offset = models.PositiveSmallIntegerField(default=15, help_text="Days after generation when fee is due")
@@ -204,7 +204,6 @@ class GymCustomer(models.Model):
 
     def save(self, *args, **kwargs):
         if self.monthly_fee == 0:
-            # Try to get default from GymSettings
             settings = GymSettings.objects.first()
             if settings:
                 self.monthly_fee = settings.default_monthly_fee
@@ -228,6 +227,9 @@ class GymSubscription(models.Model):
     due_date = models.DateField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     remarks = models.TextField(blank=True, null=True)
+    # new fields for multi-month & cancellation
+    is_cancelled = models.BooleanField(default=False)
+    cancelled_on = models.DateField(blank=True, null=True)
 
     class Meta:
         unique_together = ['customer', 'month', 'year']
@@ -253,7 +255,8 @@ class GymSubscription(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.customer.name} - {self.month}/{self.year} - {self.get_status_display()}"
+        cancel = " [CANCELLED]" if self.is_cancelled else ""
+        return f"{self.customer.name} - {self.month}/{self.year} - {self.get_status_display()}{cancel}"
 
 class GymPayment(models.Model):
     PAYMENT_MODE_CHOICES = [
@@ -286,13 +289,24 @@ class GymPayment(models.Model):
 class GymAttendance(models.Model):
     customer = models.ForeignKey(GymCustomer, on_delete=models.CASCADE, related_name='attendances')
     date = models.DateField(default=date.today)
-    check_in = models.DateTimeField(auto_now_add=True)
+    check_in = models.DateTimeField(default=timezone.now)
     check_out = models.DateTimeField(blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True)   # for edit window
 
     class Meta:
         unique_together = ['customer', 'date']
         ordering = ['-date', '-check_in']
+
+    def is_editable(self):
+        """Can edit within 7 hours of check-in or check-out (whichever is later)"""
+        from django.utils import timezone
+        now = timezone.now()
+        latest = self.check_out or self.check_in
+        if not latest:
+            return True
+        diff = now - latest
+        return diff.total_seconds() <= 7 * 3600
 
     def __str__(self):
         return f"{self.customer.name} - {self.date} - IN:{self.check_in.strftime('%H:%M') if self.check_in else '--'}"

@@ -1,5 +1,5 @@
 from django import forms
-from .models import Student, FeeStructure, PaymentTransaction, SchoolFeeSettings, GymCustomer, GymAttendance
+from .models import Student, FeeStructure, PaymentTransaction, SchoolFeeSettings
 
 class StudentForm(forms.ModelForm):
     class Meta:
@@ -70,7 +70,7 @@ class GymAttendanceForm(forms.Form):
     def __init__(self, *args, **kwargs):
         from .models import GymCustomer
         super().__init__(*args, **kwargs)
-        self.fields['customer'].queryset = GymCustomer.objects.filter(status='active')
+        self.fields['customer'].queryset = GymCustomer.objects.filter(status='active', membership_end__gte=date.today()) | GymCustomer.objects.filter(status='active', membership_end__isnull=True)
 
 class GymPaymentForm(forms.Form):
     customer = forms.ModelChoiceField(queryset=None, label="Customer")
@@ -81,7 +81,7 @@ class GymPaymentForm(forms.Form):
     def __init__(self, *args, **kwargs):
         from .models import GymCustomer
         super().__init__(*args, **kwargs)
-        self.fields['customer'].queryset = GymCustomer.objects.filter(status='active')
+        self.fields['customer'].queryset = GymCustomer.objects.filter(status='active', membership_end__gte=date.today()) | GymCustomer.objects.filter(status='active', membership_end__isnull=True)
 
 class GymSettingsForm(forms.ModelForm):
     class Meta:
@@ -93,20 +93,4 @@ class GymSettingsForm(forms.ModelForm):
             'subscription_generation_day': forms.NumberInput(attrs={'min': 1, 'max': 31}),
             'due_date_offset': forms.NumberInput(attrs={'min': 1}),
             'late_fee_penalty': forms.NumberInput(attrs={'step': '0.01'}),
-        }
-
-# Subscription generation form (no model needed)
-class GenerateSubscriptionForm(forms.Form):
-    months = forms.ChoiceField(choices=[(1,'1 Month'),(2,'2 Months'),(3,'3 Months')], initial=1, label="Duration")
-    fee = forms.DecimalField(max_digits=10, decimal_places=2, label="Monthly Fee (₹)", required=True)
-
-# Attendance edit form
-class AttendanceEditForm(forms.ModelForm):
-    class Meta:
-        model = GymAttendance
-        fields = ['check_in', 'check_out', 'notes']
-        widgets = {
-            'check_in': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
-            'check_out': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
-            'notes': forms.Textarea(attrs={'rows': 2}),
         }

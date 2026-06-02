@@ -900,17 +900,26 @@ def gym_customer_edit(request, schema_name, customer_id):
 
 def gym_customer_profile(request, schema_name, customer_id):
     tenant = get_tenant(request, schema_name)
-    from .models import GymCustomer, GymSubscription, GymPayment
+    from .models import GymCustomer, GymSubscription, GymPayment, GymAttendance
+    from datetime import date, timedelta
     with schema_context(schema_name):
         customer = get_object_or_404(GymCustomer, id=customer_id)
         subscriptions = customer.subscriptions.all().order_by('-year', '-month')
+        print(f"DEBUG PROFILE: customer {customer_id} subscriptions = {subscriptions.count()}")
+        for s in subscriptions:
+            print(f"  - {s.month}/{s.year} amount={s.amount} paid={s.paid_amount} status={s.status}")
         payments = customer.payments.all().order_by('-payment_date')
+        attendances = customer.attendances.all().order_by('-date')  # add attendance
         total_fee = subscriptions.aggregate(Sum('amount'))['amount__sum'] or 0
         total_paid = payments.aggregate(Sum('amount'))['amount__sum'] or 0
         pending_total = total_fee - total_paid
+        # Add editable flag to each attendance
+        for a in attendances:
+            a.can_edit = a.is_editable()
         context = {
             'tenant': tenant, 'customer': customer, 'subscriptions': subscriptions, 'payments': payments,
             'total_fee': total_fee, 'total_paid': total_paid, 'pending_total': pending_total,
+            'attendances': attendances,  # new
             'logo_url': tenant.school_logo.url if tenant.school_logo else None,
         }
     return render(request, 'tenant/gym_customer_profile.html', context)
@@ -928,7 +937,7 @@ def gym_attendance(request, schema_name):
                 customer = form.cleaned_data['customer']
                 check_out = form.cleaned_data['check_out']
                 notes = form.cleaned_data['notes']
-                attendance, created = GymAttendance.objects.get_or_create(customer=customer, date=today)
+                attendance, created = GymAttendance.objects.get_or_create(customer=customer, date=today, defaults={"check_in": timezone.now()})
                 if check_out:
                     attendance.check_out = check_out
                 if notes:
@@ -1134,7 +1143,7 @@ def gym_checkin_api(request):
         from datetime import date
         customer = get_object_or_404(GymCustomer, id=customer_id)
         today = date.today()
-        attendance, created = GymAttendance.objects.get_or_create(customer=customer, date=today)
+        attendance, created = GymAttendance.objects.get_or_create(customer=customer, date=today, defaults={"check_in": timezone.now()})
         # If already checked in today, just return
         return JsonResponse({"message": f"Check-in recorded for {customer.name}", "already_checked_in": not created})
 
@@ -1182,3 +1191,169 @@ def gym_receipt(request, schema_name, receipt_id):
             'logo_url': tenant.school_logo.url if tenant.school_logo else None,
         }
     return render(request, 'tenant/gym_receipt.html', context)
+
+# ========== GYM SUBSCRIPTION GENERATION ==========
+def gym_generate_subscription(request, schema_name, customer_id):
+    """Generate subscription for current month with optional multi-month"""
+    from django.http import JsonResponse
+    from django.views.decorators.csrf import csrf_exempt
+    from .models import GymCustomer, GymSubscription, GymSettings
+    from decimal import Decimal
+    from datetime import date
+    from calendar import monthrange
+    import json, traceback
+
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+    except:
+        data = request.POST
+
+    months = int(data.get('months', 1))
+    custom_fee = data.get('fee')
+    if not custom_fee:
+        return JsonResponse({'error': 'Fee amount required'}, status=400)
+    custom_fee = Decimal(str(custom_fee))
+
+    if months < 1 or months > 3:
+        return JsonResponse({'error': 'Months must be between 1 and 3'}, status=400)
+
+    tenant = get_tenant(request, schema_name)
+    with schema_context(schema_name):
+        customer = get_object_or_404(GymCustomer, id=customer_id)
+        settings, _ = GymSettings.objects.get_or_create(pk=1)
+        today = date.today()
+        generated = []
+        skipped = []
+        for i in range(months):
+            gen_month = today.month + i
+            gen_year = today.year
+            while gen_month > 12:
+                gen_month -= 12
+                gen_year += 1
+            existing = GymSubscription.objects.filter(customer=customer, month=gen_month, year=gen_year).first()
+            if existing and existing.is_fully_paid:
+                skipped.append(f"{gen_month}/{gen_year}")
+                continue
+            elif existing and not existing.is_fully_paid:
+                existing.amount = custom_fee
+                existing.due_date = date(gen_year, gen_month, min(settings.due_date_offset, monthrange(gen_year, gen_month)[1]))
+                existing.is_cancelled = False
+                existing.cancelled_on = None
+                existing.save()
+                generated.append(f"{gen_month}/{gen_year} (updated)")
+            else:
+                due_day = min(settings.due_date_offset, monthrange(gen_year, gen_month)[1])
+                due_date = date(gen_year, gen_month, due_day)
+                try:
+                    GymSubscription.objects.create(
+                        customer=customer,
+                        month=gen_month,
+                        year=gen_year,
+                        amount=custom_fee,
+                        due_date=due_date,
+                        status='pending'
+                    )
+                    generated.append(f"{gen_month}/{gen_year}")
+                except Exception as e:
+                    print(f"Creation failed: {e}")
+                    traceback.print_exc()
+                    return JsonResponse({"error": f"Creation failed: {str(e)}"}, status=500)
+        customer.monthly_fee = custom_fee
+        customer.save()
+        return JsonResponse({'message': f'Subscription generated for {len(generated)} month(s): {", ".join(generated)}', 'skipped': skipped})
+
+def gym_cancel_subscription(request, schema_name, subscription_id):
+    from django.http import JsonResponse
+    from django.views.decorators.csrf import csrf_exempt
+    from .models import GymSubscription, GymPayment
+    from decimal import Decimal
+    from datetime import date
+
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+    tenant = get_tenant(request, schema_name)
+    with schema_context(schema_name):
+        sub = get_object_or_404(GymSubscription, id=subscription_id)
+        if sub.is_cancelled:
+            return JsonResponse({'error': 'Already cancelled'}, status=400)
+        if sub.status == 'paid':
+            return JsonResponse({'error': 'Fully paid subscriptions cannot be cancelled'}, status=400)
+
+        # Calculate refund for current month if partially used
+        today = date.today()
+        # Determine number of days in month
+        from calendar import monthrange
+        days_in_month = monthrange(sub.year, sub.month)[1]
+        # Days used = today's day number (if today <= last day of month, else full month)
+        if today.year == sub.year and today.month == sub.month:
+            days_used = min(today.day, days_in_month)
+        else:
+            # Future month - zero used
+            days_used = 0
+        daily_rate = sub.amount / days_in_month
+        used_amount = daily_rate * days_used
+        refund = sub.paid_amount - used_amount
+        if refund < 0:
+            refund = Decimal('0.00')
+
+        # Update subscription
+        sub.is_cancelled = True
+        sub.cancelled_on = today
+        # Adjust paid_amount to used_amount
+        sub.paid_amount = used_amount
+        sub.save()
+
+        # If refund > 0, create a negative payment (or just record adjustment)
+        if refund > 0:
+            # We'll create a "refund" payment (negative amount) for audit
+            GymPayment.objects.create(
+                customer=sub.customer,
+                amount=-refund,
+                payment_mode='refund',
+                payment_type='refund',
+                remarks=f'Refund for cancelled subscription {sub.month}/{sub.year}',
+                created_by=request.session.get('school_admin_username', 'admin')
+            ).subscriptions.add(sub)
+
+        return JsonResponse({'message': f'Subscription cancelled. Refund amount: ₹{refund}', 'refund': float(refund)})
+
+# ========== ATTENDANCE EDIT ==========
+def gym_edit_attendance(request, schema_name, attendance_id):
+    from django.http import JsonResponse
+    from django.views.decorators.csrf import csrf_exempt
+    from .models import GymAttendance
+    from .forms import AttendanceEditForm
+    import json
+
+    tenant = get_tenant(request, schema_name)
+    with schema_context(schema_name):
+        attendance = get_object_or_404(GymAttendance, id=attendance_id)
+        if not attendance.is_editable():
+            return JsonResponse({'error': 'Attendance record is older than 7 hours and cannot be edited'}, status=400)
+
+        if request.method == 'POST':
+            form = AttendanceEditForm(request.POST, instance=attendance)
+            if form.is_valid():
+                form.save()
+                return JsonResponse({'message': 'Attendance updated successfully'})
+            else:
+                return JsonResponse({'errors': form.errors}, status=400)
+        else:
+            # GET: return current data
+            data = {
+                'check_in': attendance.check_in.isoformat() if attendance.check_in else '',
+                'check_out': attendance.check_out.isoformat() if attendance.check_out else '',
+                'notes': attendance.notes or '',
+                'editable': attendance.is_editable()
+            }
+            return JsonResponse(data)
+
+# ========== ATTENDANCE HISTORY ON CUSTOMER PROFILE ==========
+# Add attendance data to gym_customer_profile context
+# We'll override the existing gym_customer_profile view to include attendance history.
+# Since we already have that view in views.py, we'll add lines there.
+# We'll patch that function.
