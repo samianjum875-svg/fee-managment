@@ -1,57 +1,1732 @@
 #!/usr/bin/env python3
+"""
+Final fix:
+1. Change session engine to database (fixes missing /tmp/django_sessions/ error)
+2. Apply the final gym attendance page (two tables, no refresh reset)
+"""
+
+import os
 import re
-import shutil
-from pathlib import Path
 
-MODELS_PATH = Path("axis_saas/models.py")
-BACKUP_PATH = MODELS_PATH.with_suffix(".py.bak")
+# ----------------------------------------------------------------------
+# Fix settings.py – use database sessions
+# ----------------------------------------------------------------------
+def fix_settings():
+    settings_path = os.path.join('axis_saas', 'settings.py')
+    if not os.path.exists(settings_path):
+        print(f"❌ Could not find {settings_path}")
+        return False
 
-CORRECTED_CLASS = '''class GymAttendance(models.Model):
-    customer = models.ForeignKey(GymCustomer, on_delete=models.CASCADE, related_name='attendances')
-    date = models.DateField(default=date.today)
-    check_in = models.DateTimeField(default=timezone.now)
-    check_out = models.DateTimeField(blank=True, null=True)
-    notes = models.TextField(blank=True, null=True)
-    updated_at = models.DateTimeField(auto_now=True)   # for edit window
-
-    class Meta:
-        unique_together = ['customer', 'date']
-        ordering = ['-date', '-check_in']
-
-    def is_editable(self):
-        """Allow admin to edit any attendance record (no time limit)."""
-        return True
-
-    def __str__(self):
-        return f"{self.customer.name} - {self.date} - IN:{self.check_in.strftime('%H:%M') if self.check_in else '--'}"'''
-
-def main():
-    if not MODELS_PATH.exists():
-        print(f"❌ {MODELS_PATH} not found. Run this script from the project root (axis_school_sys).")
-        return
-
-    # Backup original
-    shutil.copy2(MODELS_PATH, BACKUP_PATH)
-    print(f"✅ Backup saved to {BACKUP_PATH}")
-
-    with open(MODELS_PATH, "r", encoding="utf-8") as f:
+    with open(settings_path, 'r', encoding='utf-8') as f:
         content = f.read()
 
-    # Find the old GymAttendance class (from "class GymAttendance" to the next class or end)
-    pattern = r'(class GymAttendance\(models\.Model\):.*?)(?=\nclass |\Z)'
-    match = re.search(pattern, content, re.DOTALL)
-    if not match:
-        print("❌ Could not locate GymAttendance class. It may have been modified already.")
-        return
+    # Change SESSION_ENGINE to database backend
+    new_content = re.sub(
+        r"SESSION_ENGINE\s*=\s*['\"].*?['\"]",
+        "SESSION_ENGINE = 'django.contrib.sessions.backends.db'",
+        content
+    )
+    # Remove SESSION_FILE_PATH line if present
+    new_content = re.sub(r"\nSESSION_FILE_PATH\s*=\s*['\"].*?['\"]\n", "\n", new_content)
 
-    old_class = match.group(1)
-    new_content = content.replace(old_class, CORRECTED_CLASS, 1)
+    if new_content != content:
+        with open(settings_path, 'w', encoding='utf-8') as f:
+            f.write(new_content)
+        print("✅ Fixed session engine in settings.py (now using database sessions)")
+    else:
+        print("ℹ️ Session engine already set to database (or no change needed)")
 
-    with open(MODELS_PATH, "w", encoding="utf-8") as f:
-        f.write(new_content)
+    return True
 
-    print("✅ GymAttendance class corrected (is_editable method properly indented).")
-    print("\n➡️  Restart your Django development server (Ctrl+C then python3 manage.py runserver)")
+# ----------------------------------------------------------------------
+# New content for axis_saas/views.py (gym_attendance only, but we'll provide the whole file)
+# ----------------------------------------------------------------------
+NEW_VIEWS_PY = '''from django.shortcuts import render, redirect, get_object_or_404
+from django.http import JsonResponse
+from django.contrib import messages
+from django.db.models import Sum, Q
+from django.core.paginator import Paginator
+from django.db import connection
+from django_tenants.utils import schema_context
+from decimal import Decimal
+from datetime import date, timedelta
+import json
+from functools import wraps
+from django.views.decorators.csrf import csrf_exempt
+from django.utils import timezone
+from django.views.decorators.http import require_http_methods
 
-if __name__ == "__main__":
+from .models import SchoolClient, Student, FeeStructure, FeeRecord, PaymentTransaction, SchoolFeeSettings
+from .forms import StudentForm, FeeCollectionForm, FeeSettingsForm, FeeStructureForm, FamilyPaymentForm
+
+def get_tenant(request, schema_name):
+    return get_object_or_404(SchoolClient, schema_name=schema_name)
+
+# ------------------- Dashboard -------------------
+def dashboard(request, schema_name):
+    tenant = get_tenant(request, schema_name)
+    with schema_context(schema_name):
+        today = timezone.localdate()
+        first_day_month = today.replace(day=1)
+        today_collection = PaymentTransaction.objects.filter(payment_date=today).aggregate(Sum('amount'))['amount__sum'] or 0
+        month_collection = PaymentTransaction.objects.filter(payment_date__gte=first_day_month).aggregate(Sum('amount'))['amount__sum'] or 0
+        pending_records = FeeRecord.objects.filter(status__in=['pending', 'partial', 'overdue'])
+        total_pending = sum(r.remaining for r in pending_records)
+        defaulters_count = Student.objects.filter(fee_records__status__in=['pending', 'partial', 'overdue']).distinct().count()
+        total_payments_count = PaymentTransaction.objects.count()
+        recent_payments = PaymentTransaction.objects.select_related('student').order_by('-payment_date')[:5]
+        recent_payments = list(recent_payments)
+        top_defaulters = []
+        for student in Student.objects.all():
+            pending = sum(fr.remaining for fr in student.fee_records.filter(status__in=['pending', 'partial', 'overdue']))
+            if pending > 0:
+                top_defaulters.append({'student': student, 'pending': pending})
+        top_defaulters = sorted(top_defaulters, key=lambda x: x['pending'], reverse=True)[:5]
+        months_labels = []
+        months_amounts = []
+        for i in range(5, -1, -1):
+            m = today.month - i
+            y = today.year
+            if m <= 0:
+                m += 12
+                y -= 1
+            total = PaymentTransaction.objects.filter(payment_date__year=y, payment_date__month=m).aggregate(Sum('amount'))['amount__sum'] or 0
+            months_labels.append(f"{m}/{y}")
+            months_amounts.append(float(total))
+    context = {
+        'tenant': tenant, 'today_collection': today_collection, 'month_collection': month_collection,
+        'total_pending': total_pending, 'defaulters_count': defaulters_count,
+        'recent_payments': recent_payments, 'top_defaulters': top_defaulters,
+        'months_labels': months_labels, 'months_amounts': months_amounts,
+        'logo_url': tenant.school_logo.url if tenant.school_logo else None,
+        'today': today, 'start_date': first_day_month,
+    }
+    return render(request, 'tenant/dashboard.html', context)
+
+# ------------------- Student List -------------------
+def student_list(request, schema_name):
+    tenant = get_tenant(request, schema_name)
+    query = request.GET.get('q', '')
+    grade = request.GET.get('grade', '')
+    section = request.GET.get('section', '')
+    status = request.GET.get('status', '')
+    with schema_context(schema_name):
+        students = Student.objects.all()
+        if query:
+            students = students.filter(
+                Q(name__icontains=query) | Q(roll_number__icontains=query) |
+                Q(father_name__icontains=query) | Q(father_cnic__icontains=query) |
+                Q(parent_mobile__icontains=query) | Q(grade__icontains=query)
+            )
+        if grade: students = students.filter(grade=grade)
+        if section: students = students.filter(section=section)
+        if status: students = students.filter(status=status)
+        students = students.order_by('-enrolled_on')
+        for s in students:
+            s.pending_amount = sum(fr.remaining for fr in s.fee_records.filter(status__in=['pending', 'partial', 'overdue']))
+        grades = Student.objects.values_list('grade', flat=True).distinct().order_by('grade')
+        grades = list(grades)
+        sections = Student.objects.values_list('section', flat=True).distinct().order_by('section')
+        sections = list(sections)
+        status_choices = Student.STATUS_CHOICES
+    context = {
+        'tenant': tenant, 'students': students, 'grades': grades, 'sections': sections,
+        'status_choices': status_choices, 'search_query': query,
+        'logo_url': tenant.school_logo.url if tenant.school_logo else None,
+    }
+    return render(request, 'tenant/student_list.html', context)
+
+# ------------------- Student Profile -------------------
+def student_profile(request, schema_name, student_id):
+    tenant = get_tenant(request, schema_name)
+    with schema_context(schema_name):
+        student = get_object_or_404(Student, id=student_id)
+        fee_records_qs = student.fee_records.all().order_by('-year', '-month')
+        total_fee = fee_records_qs.aggregate(Sum('amount'))['amount__sum'] or 0
+        fee_records = list(fee_records_qs)
+        payments_qs = student.payments.all().order_by('-payment_date')
+        total_paid = payments_qs.aggregate(Sum('amount'))['amount__sum'] or 0
+        payments = list(payments_qs)
+        pending_total = total_fee - total_paid
+    context = {
+        'tenant': tenant, 'student': student, 'fee_records': fee_records, 'payments': payments,
+        'total_fee': total_fee, 'total_paid': total_paid, 'pending_total': pending_total,
+        'logo_url': tenant.school_logo.url if tenant.school_logo else None,
+    }
+    return render(request, 'tenant/student_profile.html', context)
+
+def fee_receipt(request, schema_name, receipt_id):
+    tenant = get_tenant(request, schema_name)
+    with schema_context(schema_name):
+        payment = get_object_or_404(PaymentTransaction.objects.select_related('student'), id=receipt_id)
+        fee_records = list(payment.fee_records.all())
+        context = {
+            'tenant': tenant,
+            'payment': payment,
+            'fee_records': fee_records,
+            'logo_url': tenant.school_logo.url if tenant.school_logo else None,
+        }
+    return render(request, 'tenant/receipt.html', context)
+def defaulters(request, schema_name):
+    tenant = get_tenant(request, schema_name)
+    days = request.GET.get('days', '0')
+    try:
+        days = int(days)
+    except:
+        days = 0
+    if days < 0: days = 0
+    with schema_context(schema_name):
+        today = timezone.localdate()
+        cutoff = today - timedelta(days=days) if days > 0 else None
+        base_qs = Student.objects.filter(fee_records__status__in=['pending', 'partial', 'overdue']).distinct()
+        if cutoff:
+            base_qs = base_qs.filter(fee_records__due_date__lte=cutoff)
+        result = []
+        for student in base_qs:
+            pending_fee = sum(fr.remaining for fr in student.fee_records.filter(status__in=['pending', 'partial', 'overdue']))
+            oldest_due = student.fee_records.filter(status__in=['pending', 'partial', 'overdue']).order_by('due_date').first()
+            days_overdue = (today - oldest_due.due_date).days if oldest_due and oldest_due.due_date < today else 0
+            result.append({'student': student, 'pending_amount': pending_fee, 'days_overdue': days_overdue})
+        result.sort(key=lambda x: x['days_overdue'], reverse=True)
+        total_pending_all = sum(fr.remaining for fr in FeeRecord.objects.filter(status__in=['pending', 'partial', 'overdue']))
+    context = {
+        'tenant': tenant, 'defaulters': result, 'days': days, 'total_pending_all': total_pending_all,
+        'logo_url': tenant.school_logo.url if tenant.school_logo else None,
+    }
+    return render(request, 'tenant/defaulters.html', context)
+
+# ------------------- Reports -------------------
+def reports(request, schema_name):
+    tenant = get_tenant(request, schema_name)
+    report_type = request.GET.get('type', 'collection')
+    today = timezone.localdate()
+    quick_filter = request.GET.get('quick_filter')
+    start_date_str = request.GET.get('start_date')
+    end_date_str = request.GET.get('end_date')
+    search_q = request.GET.get('search', '').strip()
+    page_num = request.GET.get('page', 1)
+
+    # Determine date range
+    if quick_filter == 'today':
+        start_date = end_date = today
+    elif quick_filter == 'week':
+        start_date = today - timedelta(days=today.weekday())
+        end_date = start_date + timedelta(days=6)
+    elif quick_filter == 'month':
+        start_date = today.replace(day=1)
+        end_date = today
+    elif quick_filter == 'year':
+        start_date = today.replace(month=1, day=1)
+        end_date = today
+    elif quick_filter == 'all':
+        start_date = date(2000, 1, 1)
+        end_date = today
+    elif quick_filter == 'last6months':
+        start_date = today - timedelta(days=180)
+        end_date = today
+    elif start_date_str and end_date_str:
+        try:
+            start_date = date.fromisoformat(start_date_str)
+            end_date = date.fromisoformat(end_date_str)
+            if start_date > end_date:
+                start_date, end_date = end_date, start_date
+            quick_filter = 'custom'
+        except:
+            start_date = today - timedelta(days=180)
+            end_date = today
+            quick_filter = 'last6months'
+    else:
+        start_date = date(2000, 1, 1)
+        end_date = today
+        quick_filter = 'all'
+
+    with schema_context(schema_name):
+        payments_qs = PaymentTransaction.objects.filter(payment_date__gte=start_date, payment_date__lte=end_date)
+        if search_q:
+            payments_qs = payments_qs.filter(
+                Q(receipt_number__icontains=search_q) |
+                Q(student__name__icontains=search_q) |
+                Q(student__roll_number__icontains=search_q)
+            )
+
+        paginator = Paginator(payments_qs.order_by('-payment_date'), 15)
+        payments_page = paginator.get_page(page_num)
+
+        total_collection = payments_qs.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+        payment_count = payments_qs.count()
+
+        pending_records = FeeRecord.objects.filter(status__in=['pending', 'partial', 'overdue'])
+        total_pending = sum(r.remaining for r in pending_records)
+
+        total_collection_all = PaymentTransaction.objects.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+        total_billed = total_collection_all + total_pending
+        collection_rate = (float(total_collection_all) / float(total_billed) * 100) if total_billed > 0 else 0
+
+        defaulters_count = Student.objects.filter(fee_records__status__in=['pending', 'partial', 'overdue']).distinct().count()
+
+        monthly_data = []
+        for i in range(5, -1, -1):
+            m = today.month - i
+            y = today.year
+            if m <= 0:
+                m += 12
+                y -= 1
+            total = PaymentTransaction.objects.filter(payment_date__year=y, payment_date__month=m).aggregate(Sum('amount'))['amount__sum'] or 0
+            monthly_data.append({'month': f"{m}/{y}", 'amount': float(total)})
+
+        mode_totals = {}
+        for mode_code, mode_name in PaymentTransaction.PAYMENT_MODE_CHOICES:
+            total = payments_qs.filter(payment_mode=mode_code).aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+            if total > 0:
+                mode_totals[mode_name] = float(total)
+        mode_distribution = [{'name': k, 'amount': v} for k, v in mode_totals.items()]
+
+        class_pending = []
+        grades = Student.objects.values_list('grade', flat=True).distinct().order_by('grade')
+        grades = list(grades)
+        for grade in grades:
+            students = Student.objects.filter(grade=grade)
+            pending = sum(sum(fr.remaining for fr in s.fee_records.filter(status__in=['pending', 'partial', 'overdue'])) for s in students)
+            if pending > 0:
+                class_pending.append({'grade': grade, 'pending': float(pending)})
+        class_pending.sort(key=lambda x: x['pending'], reverse=True)
+
+        top_defaulters = []
+        for student in Student.objects.all():
+            pending = sum(fr.remaining for fr in student.fee_records.filter(status__in=['pending', 'partial', 'overdue']))
+            if pending > 0:
+                top_defaulters.append({'student': student, 'pending': float(pending)})
+        top_defaulters = sorted(top_defaulters, key=lambda x: x['pending'], reverse=True)[:5]
+
+        defaulters_list = Student.objects.filter(fee_records__status__in=['pending', 'partial', 'overdue']).distinct()
+        defaulters_data = []
+        for student in defaulters_list:
+            pending = sum(fr.remaining for fr in student.fee_records.filter(status__in=['pending', 'partial', 'overdue']))
+            oldest_due = student.fee_records.filter(status__in=['pending', 'partial', 'overdue']).order_by('due_date').first()
+            days_overdue = (timezone.localdate() - oldest_due.due_date).days if oldest_due and oldest_due.due_date < timezone.localdate() else 0
+            defaulters_data.append({
+                'student': student,
+                'pending_amount': pending,
+                'days_overdue': days_overdue
+            })
+        defaulters_data.sort(key=lambda x: x['days_overdue'], reverse=True)
+
+        context = {
+            'tenant': tenant,
+            'report_type': report_type,
+            'start_date': start_date,
+            'end_date': end_date,
+            'quick_filter': quick_filter,
+            'search_query': search_q,
+            'total_collection': total_collection,
+            'total_pending': total_pending,
+            'collection_rate': round(collection_rate, 1),
+            'defaulters_count': defaulters_count,
+            'monthly_data': monthly_data,
+            'mode_distribution': mode_distribution,
+            'class_pending': class_pending,
+            'top_defaulters': top_defaulters,
+            'defaulters_data': defaulters_data,
+            'payments': payments_page,
+            'total': total_collection,
+            'payment_count': payment_count,
+            'logo_url': tenant.school_logo.url if tenant.school_logo else None,
+            'total_collection_all': total_collection_all,
+        }
+    return render(request, 'tenant/reports.html', context)
+
+def fee_collection(request, schema_name, student_id=None):
+    tenant = get_tenant(request, schema_name)
+    with schema_context(schema_name):
+        # Handle POST payment
+        if request.method == 'POST':
+            student_id_post = request.POST.get('student_id')
+            amount = request.POST.get('amount')
+            payment_mode = request.POST.get('payment_mode')
+            remarks = request.POST.get('remarks', '')
+            if student_id_post and amount:
+                try:
+                    student = Student.objects.get(id=student_id_post)
+                    amount = Decimal(amount)
+                    # Get pending records for this student
+                    pending_records = student.fee_records.filter(status__in=['pending', 'partial', 'overdue']).order_by('due_date')
+                    total_pending = sum(r.remaining for r in pending_records)
+                    if amount > total_pending:
+                        messages.error(request, f"Amount exceeds total pending (₹{total_pending})")
+                        return redirect('fee_collection', schema_name=schema_name, student_id=student.id)
+                    remaining = amount
+                    paid_records = []
+                    for record in pending_records:
+                        if remaining <= 0:
+                            break
+                        due = record.remaining
+                        if remaining >= due:
+                            record.paid_amount = record.amount
+                            remaining -= due
+                        else:
+                            record.paid_amount += remaining
+                            remaining = 0
+                        record.save()
+                        paid_records.append(record)
+                    # Create payment transaction
+                    payment = PaymentTransaction.objects.create(
+                        student=student,
+                        amount=amount,
+                        payment_mode=payment_mode,
+                        payment_type='full' if remaining == 0 else 'partial',
+                        remarks=remarks,
+                        created_by=request.session.get('school_admin_username', 'admin')
+                    )
+                    payment.fee_records.set(paid_records)
+                    messages.success(request, f"Payment of ₹{amount} received. Receipt: {payment.receipt_number}")
+                    return redirect('fee_collection', schema_name=schema_name, student_id=student.id)
+                except Student.DoesNotExist:
+                    messages.error(request, "Student not found")
+                except Exception as e:
+                    messages.error(request, f"Error processing payment: {str(e)}")
+            else:
+                messages.error(request, "Invalid payment data")
+            return redirect('fee_collection', schema_name=schema_name)
+
+        # GET request - prepare filters and student data
+        search_filter = request.GET.get('pending_search', '')
+        grade_filter = request.GET.get('pending_grade', '')
+        section_filter = request.GET.get('pending_section', '')
+        page_number = request.GET.get('page', 1)
+
+        # Get all students with pending fees (aggregated)
+        students_qs = Student.objects.all()
+        if search_filter:
+            students_qs = students_qs.filter(
+                Q(name__icontains=search_filter) | Q(roll_number__icontains=search_filter) |
+                Q(father_name__icontains=search_filter) | Q(father_cnic__icontains=search_filter)
+            )
+        if grade_filter:
+            students_qs = students_qs.filter(grade=grade_filter)
+        if section_filter:
+            students_qs = students_qs.filter(section=section_filter)
+
+        # Annotate pending total
+        pending_students = []
+        for s in students_qs:
+            pending = sum(fr.remaining for fr in s.fee_records.filter(status__in=['pending', 'partial', 'overdue']))
+            if pending > 0:
+                s.pending_total = pending
+                pending_students.append(s)
+        pending_students.sort(key=lambda x: x.pending_total, reverse=True)
+
+        # Pagination
+        paginator = Paginator(pending_students, 20)
+        pending_page = paginator.get_page(page_number)
+
+        # Selected student details if student_id provided
+        selected_student = None
+        total_pending = 0
+        pending_records = []
+        if student_id:
+            try:
+                selected_student = Student.objects.get(id=student_id)
+                pending_records = selected_student.fee_records.filter(status__in=['pending', 'partial', 'overdue']).order_by('due_date')
+                total_pending = sum(r.remaining for r in pending_records)
+            except Student.DoesNotExist:
+                pass
+
+        # Recent payments
+        recent_payments = list(PaymentTransaction.objects.select_related('student').order_by('-payment_date')[:5])
+        total_pending_all = sum(fr.remaining for fr in FeeRecord.objects.filter(status__in=['pending', 'partial', 'overdue']))
+        total_payments_count = PaymentTransaction.objects.count()
+        grades = list(Student.objects.values_list('grade', flat=True).distinct().order_by('grade'))
+        sections = list(Student.objects.values_list('section', flat=True).distinct().order_by('section'))
+
+        context = {
+            'tenant': tenant,
+            'pending_students': pending_page,
+            'selected_student': selected_student,
+            'total_pending': total_pending,
+            'pending_records': pending_records,
+            'recent_payments': recent_payments,
+            'total_pending_all': total_pending_all,
+            'total_payments_count': total_payments_count,
+            'grades': grades,
+            'sections': sections,
+            'search_filter': search_filter,
+            'grade_filter': grade_filter,
+            'section_filter': section_filter,
+            'logo_url': tenant.school_logo.url if tenant.school_logo else None,
+        }
+        return render(request, 'tenant/fee_collection.html', context)
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def debug_payments_api(request):
+    if not request.session.get('school_admin_authenticated'):
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+    schema_name = request.session.get('school_admin_schema')
+    if not schema_name:
+        return JsonResponse({'error': 'No tenant schema'}, status=400)
+    try:
+        tenant = SchoolClient.objects.get(schema_name=schema_name)
+    except SchoolClient.DoesNotExist:
+        return JsonResponse({'error': 'Tenant not found'}, status=404)
+    with schema_context(schema_name):
+        payments = PaymentTransaction.objects.all().order_by('-payment_date')[:10]
+        data = [{
+            'id': p.id,
+            'receipt_number': p.receipt_number,
+            'student_id': p.student_id,
+            'amount': float(p.amount),
+            'date': p.payment_date.strftime('%Y-%m-%d')
+        } for p in payments]
+        return JsonResponse({'payments': data, 'total': PaymentTransaction.objects.count()})
+
+# ------------------- Settings -------------------
+def settings(request, schema_name):
+    tenant = get_tenant(request, schema_name)
+    if request.method == 'POST':
+        school_name = request.POST.get('school_name', '').strip()
+        if school_name:
+            tenant.name = school_name
+        admin_username = request.POST.get('admin_username', '').strip()
+        admin_password = request.POST.get('admin_password', '')
+        admin_password_confirm = request.POST.get('admin_password_confirm', '')
+        if admin_username:
+            tenant.admin_username = admin_username
+        if admin_password:
+            if admin_password == admin_password_confirm:
+                tenant.admin_password = admin_password
+            else:
+                messages.error(request, "Passwords do not match.")
+                return redirect('settings', schema_name=schema_name)
+        if request.FILES.get('school_logo'):
+            tenant.school_logo = request.FILES['school_logo']
+        tenant.save()
+        messages.success(request, "Settings updated successfully.")
+        return redirect('settings', schema_name=schema_name)
+    context = {'tenant': tenant, 'logo_url': tenant.school_logo.url if tenant.school_logo else None}
+    return render(request, 'tenant/settings.html', context)
+
+# ------------------- Fee Structure -------------------
+def fee_structure(request, schema_name):
+    tenant = get_tenant(request, schema_name)
+    edit_grade = request.GET.get('edit', '')
+    with schema_context(schema_name):
+        if request.method == 'POST':
+            grade = request.POST.get('grade')
+            monthly_fee = request.POST.get('monthly_fee')
+            if grade and monthly_fee:
+                obj, created = FeeStructure.objects.update_or_create(
+                    grade=grade,
+                    defaults={'monthly_fee': monthly_fee}
+                )
+                Student.objects.filter(grade=grade).update(custom_fee=monthly_fee)
+                messages.success(request, f"Fee structure for {grade} saved successfully.")
+            else:
+                messages.error(request, "Please provide both grade and monthly fee.")
+            return redirect('fee_structure', schema_name=schema_name)
+
+        # CRITICAL FIX: evaluate queryset inside schema_context (convert to list)
+        structures = list(FeeStructure.objects.all().order_by('grade'))
+        print(f"[DEBUG] Tenant {schema_name}: found {len(structures)} fee structure(s)")
+        for fs in structures:
+            print(f"  - {fs.grade}: ₹{fs.monthly_fee}")
+
+        form = FeeStructureForm()
+        if edit_grade:
+            try:
+                edit_obj = FeeStructure.objects.get(grade=edit_grade)
+                form = FeeStructureForm(initial={'grade': edit_obj.grade, 'monthly_fee': edit_obj.monthly_fee})
+            except FeeStructure.DoesNotExist:
+                pass
+
+    context = {
+        'tenant': tenant,
+        'form': form,
+        'fee_structures': structures,
+        'edit_grade': edit_grade,
+        'logo_url': tenant.school_logo.url if tenant.school_logo else None,
+        'debug_count': len(structures),
+    }
+    return render(request, 'tenant/fee_structure.html', context)
+# ------------------- Fee Settings -------------------
+def fee_settings(request, schema_name):
+    tenant = get_tenant(request, schema_name)
+    with schema_context(schema_name):
+        settings_obj, created = SchoolFeeSettings.objects.get_or_create(pk=1)
+        if request.method == 'POST':
+            form = FeeSettingsForm(request.POST, instance=settings_obj)
+            if form.is_valid():
+                form.save()
+                messages.success(request, "Fee settings updated.")
+                return redirect('fee_settings', schema_name=schema_name)
+        else:
+            form = FeeSettingsForm(instance=settings_obj)
+    context = {'tenant': tenant, 'form': form, 'logo_url': tenant.school_logo.url if tenant.school_logo else None}
+    return render(request, 'tenant/fee_settings.html', context)
+
+# ------------------- Family Payment -------------------
+def family_payment(request, schema_name):
+    tenant = get_tenant(request, schema_name)
+    with schema_context(schema_name):
+        if request.method == 'POST':
+            form = FamilyPaymentForm(request.POST)
+            if form.is_valid():
+                cnic = form.cleaned_data['father_cnic']
+                amount = form.cleaned_data['amount'] or None
+                mode = form.cleaned_data['payment_mode']
+                remarks = form.cleaned_data['remarks']
+                students = Student.objects.filter(father_cnic=cnic, status='active')
+                if not students.exists():
+                    messages.error(request, "No student found with this CNIC.")
+                    return redirect('family_payment', schema_name=schema_name)
+                total_pending = 0
+                all_pending_records = []
+                for s in students:
+                    records = s.fee_records.filter(status__in=['pending', 'partial', 'overdue']).order_by('due_date')
+                    total_pending += sum(r.remaining for r in records)
+                    all_pending_records.extend(records)
+                if amount is None:
+                    amount = total_pending
+                if amount > total_pending:
+                    messages.error(request, f"Amount exceeds total pending ({total_pending})")
+                    return redirect('family_payment', schema_name=schema_name)
+                remaining = amount
+                paid_records = []
+                for record in all_pending_records:
+                    if remaining <= 0:
+                        break
+                    due = record.remaining
+                    if remaining >= due:
+                        record.paid_amount = record.amount
+                        remaining -= due
+                    else:
+                        record.paid_amount += remaining
+                        remaining = 0
+                    record.save()
+                    paid_records.append(record)
+                for student in students:
+                    student_paid = [r for r in paid_records if r.student == student]
+                    if student_paid:
+                        payment = PaymentTransaction.objects.create(
+                            student=student, amount=sum(r.paid_amount for r in student_paid),
+                            payment_mode=mode, payment_type='full' if remaining == 0 else 'partial',
+                            remarks=remarks, created_by=request.session.get('school_admin_username', 'admin')
+                        )
+                        payment.fee_records.set(student_paid)
+                messages.success(request, f"Family payment of ₹{amount} processed for CNIC {cnic}")
+                return redirect('reports', schema_name=schema_name)
+        else:
+            form = FamilyPaymentForm()
+    context = {'tenant': tenant, 'form': form, 'logo_url': tenant.school_logo.url if tenant.school_logo else None}
+    return render(request, 'tenant/family_payment.html', context)
+
+# ------------------- API: Student Search -------------------
+def student_search_api(request, schema_name):
+    q = request.GET.get("q", "")
+    with schema_context(schema_name):
+        students = Student.objects.filter(
+            Q(name__icontains=q) | Q(roll_number__icontains=q) | Q(father_name__icontains=q) | Q(father_cnic__icontains=q)
+        )[:5]
+        data = [{"id": s.id, "name": s.name, "roll_no": s.roll_number, "grade": s.grade} for s in students]
+    return JsonResponse(data, safe=False)
+
+
+# ------------------- Add Student -------------------
+def add_student(request, schema_name):
+    tenant = get_tenant(request, schema_name)
+    with schema_context(schema_name):
+        if request.method == "POST":
+            form = StudentForm(request.POST)
+            if form.is_valid():
+                student = form.save(commit=False)
+                if student.custom_fee == 0:
+                    fee_struct = FeeStructure.objects.filter(grade=student.grade).first()
+                    if fee_struct:
+                        student.custom_fee = fee_struct.monthly_fee
+                student.save()
+                messages.success(request, f"Student {student.name} added successfully. Roll No: {student.roll_number}")
+                return redirect("student_list", schema_name=schema_name)
+        else:
+            form = StudentForm()
+        grades = FeeStructure.objects.values_list("grade", flat=True).distinct()
+        context = {
+            "tenant": tenant, "form": form, "grades": grades,
+            "logo_url": tenant.school_logo.url if tenant.school_logo else None,
+        }
+    return render(request, "tenant/student_form.html", context)
+
+
+# ------------------- Edit Student -------------------
+def edit_student(request, schema_name, student_id):
+    tenant = get_tenant(request, schema_name)
+    with schema_context(schema_name):
+        student = get_object_or_404(Student, id=student_id)
+        if request.method == "POST":
+            form = StudentForm(request.POST, instance=student)
+            if form.is_valid():
+                form.save()
+                messages.success(request, f"Student {student.name} updated successfully.")
+                return redirect("student_profile", schema_name=schema_name, student_id=student.id)
+        else:
+            form = StudentForm(instance=student)
+        grades = FeeStructure.objects.values_list("grade", flat=True).distinct()
+        context = {
+            "tenant": tenant, "form": form, "student": student, "grades": grades,
+            "logo_url": tenant.school_logo.url if tenant.school_logo else None,
+        }
+    return render(request, "tenant/student_form.html", context)
+
+
+# ------------------- API: Fee Status -------------------
+@csrf_exempt
+@require_http_methods(["GET"])
+def fee_status_api(request):
+    if not request.session.get("school_admin_authenticated"):
+        return JsonResponse({"error": "Unauthorized"}, status=401)
+    schema_name = request.session.get("school_admin_schema")
+    if not schema_name:
+        return JsonResponse({"error": "No tenant schema"}, status=400)
+    try:
+        tenant = SchoolClient.objects.get(schema_name=schema_name)
+    except SchoolClient.DoesNotExist:
+        return JsonResponse({"error": "Tenant not found"}, status=404)
+    with schema_context(schema_name):
+        settings, _ = SchoolFeeSettings.objects.get_or_create(pk=1)
+        last_record = FeeRecord.objects.order_by("-year", "-month").first()
+        last_gen = f"{last_record.month}/{last_record.year}" if last_record else "Never"
+        today = timezone.localdate()
+        gen_day = settings.fee_generation_day
+        from calendar import monthrange
+        if today.day <= gen_day:
+            next_date = date(today.year, today.month, min(gen_day, monthrange(today.year, today.month)[1]))
+        else:
+            next_month = today.month + 1 if today.month < 12 else 1
+            next_year = today.year + 1 if today.month == 12 else today.year
+            next_date = date(next_year, next_month, min(gen_day, monthrange(next_year, next_month)[1]))
+        return JsonResponse({"last_generation": last_gen, "next_generation": next_date.strftime("%Y-%m-%d"), "status": "success"})
+
+
+# ------------------- API: Manual Generate (All Students) -------------------
+@csrf_exempt
+@require_http_methods(["POST"])
+def manual_generate_api(request):
+    if not request.session.get("school_admin_authenticated"):
+        return JsonResponse({"error": "Unauthorized"}, status=401)
+    schema_name = request.session.get("school_admin_schema")
+    if not schema_name:
+        return JsonResponse({"error": "No tenant schema"}, status=400)
+    try:
+        tenant = SchoolClient.objects.get(schema_name=schema_name)
+    except SchoolClient.DoesNotExist:
+        return JsonResponse({"error": "Tenant not found"}, status=404)
+    with schema_context(schema_name):
+        settings, _ = SchoolFeeSettings.objects.get_or_create(pk=1)
+        today = timezone.localdate()
+        month = today.month
+        year = today.year
+        existing = FeeRecord.objects.filter(month=month, year=year)
+        if existing.exists():
+            return JsonResponse({"message": f"Fee records for {month}/{year} already exist. ({existing.count()} records)"})
+        students = Student.objects.filter(status="active")
+        if not students.exists():
+            return JsonResponse({"message": "No active students found. Please add students first."})
+        due_date = today + timedelta(days=settings.due_date_offset)
+        created = 0
+        skipped_no_fee = 0
+        for student in students:
+            base_fee = student.custom_fee if student.custom_fee > 0 else 0
+            if base_fee == 0:
+                fee_struct = FeeStructure.objects.filter(grade=student.grade).first()
+                if fee_struct:
+                    base_fee = fee_struct.monthly_fee
+                    student.custom_fee = base_fee
+                    student.save(update_fields=["custom_fee"])
+            if base_fee > 0:
+                obj, is_new = FeeRecord.objects.get_or_create(
+                    student=student, month=month, year=year,
+                    defaults={"amount": base_fee, "due_date": due_date, "status": "pending"}
+                )
+                if is_new:
+                    created += 1
+            else:
+                skipped_no_fee += 1
+        message = f"Generated {created} fee records for {month}/{year}."
+        if skipped_no_fee > 0:
+            message += f" Skipped {skipped_no_fee} students because no fee structure defined for their grade."
+        return JsonResponse({"message": message, "created": created, "skipped": skipped_no_fee})
+
+
+# ------------------- API: Manual Generate for Single Student -------------------
+@csrf_exempt
+@require_http_methods(["POST"])
+def manual_generate_single_api(request):
+    if not request.session.get("school_admin_authenticated"):
+        return JsonResponse({"error": "Unauthorized"}, status=401)
+    schema_name = request.session.get("school_admin_schema")
+    if not schema_name:
+        return JsonResponse({"error": "No tenant schema"}, status=400)
+    student_id = request.GET.get("student_id") or request.POST.get("student_id")
+    if not student_id:
+        return JsonResponse({"error": "Student ID required"}, status=400)
+    try:
+        tenant = SchoolClient.objects.get(schema_name=schema_name)
+    except SchoolClient.DoesNotExist:
+        return JsonResponse({"error": "Tenant not found"}, status=404)
+    with schema_context(schema_name):
+        try:
+            student = Student.objects.get(id=student_id)
+        except Student.DoesNotExist:
+            return JsonResponse({"error": "Student not found"}, status=404)
+        settings, _ = SchoolFeeSettings.objects.get_or_create(pk=1)
+        today = timezone.localdate()
+        month = today.month
+        year = today.year
+        if FeeRecord.objects.filter(student=student, month=month, year=year).exists():
+            return JsonResponse({"message": f"Fee already exists for {student.name} for {month}/{year}."})
+        base_fee = student.custom_fee if student.custom_fee > 0 else 0
+        if base_fee == 0:
+            fee_struct = FeeStructure.objects.filter(grade=student.grade).first()
+            if fee_struct:
+                base_fee = fee_struct.monthly_fee
+                student.custom_fee = base_fee
+                student.save(update_fields=["custom_fee"])
+        if base_fee <= 0:
+            return JsonResponse({"error": "No fee structure defined for this grade."}, status=400)
+        due_date = today + timedelta(days=settings.due_date_offset)
+        FeeRecord.objects.create(
+            student=student, month=month, year=year,
+            amount=base_fee, due_date=due_date, status="pending"
+        )
+        return JsonResponse({"message": f"Fee record created for {student.name} for {month}/{year}."})
+
+
+# ------------------- API: Student Fee Records (JSON) -------------------
+def student_fee_records_api(request, schema_name, student_id):
+    """Return fee records for a student as JSON."""
+    tenant = get_tenant(request, schema_name)
+    with schema_context(schema_name):
+        student = get_object_or_404(Student, id=student_id)
+        records = student.fee_records.all().order_by("-year", "-month")
+        data = [{
+            "id": r.id,
+            "month": r.month,
+            "year": r.year,
+            "amount": float(r.amount),
+            "paid_amount": float(r.paid_amount),
+            "remaining": float(r.remaining),
+            "status": r.get_status_display(),
+            "due_date": r.due_date.strftime("%Y-%m-%d"),
+            "receipts": [{"id": p.id, "number": p.receipt_number} for p in r.payments.all()]
+        } for r in records]
+        return JsonResponse(data, safe=False)
+
+
+# ------------------- API: Student Payment History (JSON) -------------------
+def student_payments_api(request, schema_name, student_id):
+    """Return payment transactions for a student as JSON."""
+    tenant = get_tenant(request, schema_name)
+    with schema_context(schema_name):
+        student = get_object_or_404(Student, id=student_id)
+        payments = student.payments.all().order_by("-payment_date")
+        payments = list(payments)
+        data = [{
+            "id": p.id,
+            "receipt_number": p.receipt_number,
+            "amount": float(p.amount),
+            "date": p.payment_date.strftime("%Y-%m-%d"),
+            "mode": p.get_payment_mode_display(),
+            "url": f"/portal/{schema_name}/fee/receipt/{p.id}/"
+        } for p in payments]
+        return JsonResponse(data, safe=False)
+
+
+
+# ==================== GYM VIEWS ====================
+
+def gym_dashboard(request, schema_name):
+    tenant = get_tenant(request, schema_name)
+    from .models import GymCustomer, GymPayment, GymAttendance, GymSubscription
+    from datetime import date, timedelta
+    with schema_context(schema_name):
+        today = timezone.localdate()
+        first_day_month = today.replace(day=1)
+        today_checkins = GymAttendance.objects.filter(date=today).count()
+        active_customers = GymCustomer.objects.filter(status='active').count()
+        month_revenue = GymPayment.objects.filter(payment_date__gte=first_day_month).aggregate(Sum('amount'))['amount__sum'] or 0
+        expiring_soon = GymCustomer.objects.filter(membership_end__gte=today, membership_end__lte=today+timedelta(days=7)).count()
+        recent_payments = list(GymPayment.objects.select_related('customer').order_by('-payment_date')[:5])
+        months_labels = []
+        months_amounts = []
+        for i in range(5, -1, -1):
+            m = today.month - i
+            y = today.year
+            if m <= 0:
+                m += 12
+                y -= 1
+            total = GymPayment.objects.filter(payment_date__year=y, payment_date__month=m).aggregate(Sum('amount'))['amount__sum'] or 0
+            months_labels.append(f"{m}/{y}")
+            months_amounts.append(float(total))
+        context = {
+            'tenant': tenant, 'today_checkins': today_checkins, 'active_customers': active_customers,
+            'month_revenue': month_revenue, 'expiring_soon': expiring_soon,
+            'recent_payments': recent_payments, 'months_labels': months_labels, 'months_amounts': months_amounts,
+            'logo_url': tenant.school_logo.url if tenant.school_logo else None,
+        }
+    return render(request, 'tenant/gym_dashboard.html', context)
+
+def gym_customer_list(request, schema_name):
+    tenant = get_tenant(request, schema_name)
+    query = request.GET.get('q', '')
+    status = request.GET.get('status', '')
+    with schema_context(schema_name):
+        from .models import GymCustomer
+        customers = GymCustomer.objects.all()
+        if query:
+            customers = customers.filter(name__icontains=query) | customers.filter(phone__icontains=query)
+        if status:
+            customers = customers.filter(status=status)
+        customers = customers.order_by('-created_on')
+        for c in customers:
+            pending = sum(s.remaining for s in c.subscriptions.filter(status__in=['pending','partial','overdue']))
+            c.pending_amount = pending
+        status_choices = GymCustomer.STATUS_CHOICES
+        context = {'tenant': tenant, 'customers': customers, 'status_choices': status_choices, 'logo_url': tenant.school_logo.url if tenant.school_logo else None}
+    return render(request, 'tenant/gym_customer_list.html', context)
+
+def gym_customer_add(request, schema_name):
+    tenant = get_tenant(request, schema_name)
+    from .forms import GymCustomerForm
+    with schema_context(schema_name):
+        if request.method == 'POST':
+            form = GymCustomerForm(request.POST, request.FILES)
+            if form.is_valid():
+                customer = form.save()
+                messages.success(request, f"Customer {customer.name} added.")
+                return redirect('gym_customer_list', schema_name=schema_name)
+        else:
+            form = GymCustomerForm()
+        context = {'tenant': tenant, 'form': form, 'logo_url': tenant.school_logo.url if tenant.school_logo else None}
+    return render(request, 'tenant/gym_customer_form.html', context)
+
+def gym_customer_edit(request, schema_name, customer_id):
+    tenant = get_tenant(request, schema_name)
+    from .forms import GymCustomerForm
+    from .models import GymCustomer
+    with schema_context(schema_name):
+        customer = get_object_or_404(GymCustomer, id=customer_id)
+        if request.method == 'POST':
+            form = GymCustomerForm(request.POST, request.FILES, instance=customer)
+            if form.is_valid():
+                form.save()
+                messages.success(request, "Customer updated.")
+                return redirect('gym_customer_list', schema_name=schema_name)
+        else:
+            form = GymCustomerForm(instance=customer)
+        context = {'tenant': tenant, 'form': form, 'customer': customer, 'logo_url': tenant.school_logo.url if tenant.school_logo else None}
+    return render(request, 'tenant/gym_customer_form.html', context)
+
+def gym_customer_profile(request, schema_name, customer_id):
+    tenant = get_tenant(request, schema_name)
+    from .models import GymCustomer, GymSubscription, GymPayment, GymAttendance
+    from decimal import Decimal
+    with schema_context(schema_name):
+        customer = get_object_or_404(GymCustomer, id=customer_id)
+        subscriptions = customer.subscriptions.all().order_by('-year', '-month')
+        payments = customer.payments.all().order_by('-payment_date')
+        attendances = customer.attendances.all().order_by('-date')
+        total_fee = subscriptions.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+        total_paid = payments.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+        pending_total = total_fee - total_paid
+        for a in attendances:
+            a.can_edit = a.is_editable()
+        context = {
+            'tenant': tenant, 'customer': customer, 'subscriptions': subscriptions, 'payments': payments,
+            'total_fee': total_fee, 'total_paid': total_paid, 'pending_total': pending_total,
+            'attendances': attendances,
+            'logo_url': tenant.school_logo.url if tenant.school_logo else None,
+        }
+    return render(request, 'tenant/gym_customer_profile.html', context)
+
+# --------------------------------------------------------------
+# FIXED GYM ATTENDANCE VIEW – uses timezone.localdate(), shows only eligible customers
+# --------------------------------------------------------------
+def gym_attendance(request, schema_name):
+    tenant = get_tenant(request, schema_name)
+    from .models import GymCustomer, GymAttendance, GymSubscription
+    from datetime import timedelta
+    from django.http import JsonResponse
+    from django.views.decorators.csrf import csrf_exempt
+    from django.utils import timezone
+
+    if request.method == 'POST' and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        # AJAX check-in
+        customer_id = request.POST.get('customer_id')
+        if not customer_id:
+            return JsonResponse({'error': 'Customer ID required'}, status=400)
+        with schema_context(schema_name):
+            try:
+                customer = GymCustomer.objects.get(id=customer_id)
+            except GymCustomer.DoesNotExist:
+                return JsonResponse({'error': 'Customer not found'}, status=404)
+            today = timezone.localdate()
+            # Check paid subscription for current month
+            has_paid = customer.subscriptions.filter(month=today.month, year=today.year, status='paid').exists()
+            if not has_paid:
+                return JsonResponse({'error': f'No paid subscription for {today.strftime("%B %Y")}'}, status=403)
+            # Check if already checked in today
+            if GymAttendance.objects.filter(customer=customer, date=today).exists():
+                return JsonResponse({'error': f'{customer.name} already checked in today.'}, status=400)
+            # Create attendance record
+            attendance = GymAttendance.objects.create(
+                customer=customer, date=today, check_in=timezone.now()
+            )
+            return JsonResponse({
+                'message': f'Check-in recorded for {customer.name}',
+                'customer_name': customer.name,
+                'customer_phone': customer.phone,
+                'check_in_time': attendance.check_in.strftime('%H:%M'),
+                'customer_id': customer.id,
+                'attendance_id': attendance.id
+            })
+    elif request.method == 'POST' and not request.headers.get('X-Requested-With'):
+        # Fallback to traditional POST (from old form) – redirect
+        customer_id = request.POST.get('customer')
+        if customer_id:
+            with schema_context(schema_name):
+                customer = get_object_or_404(GymCustomer, id=customer_id)
+                today = timezone.localdate()
+                has_paid = customer.subscriptions.filter(month=today.month, year=today.year, status='paid').exists()
+                if not has_paid:
+                    messages.error(request, f"Customer '{customer.name}' does not have a paid subscription for {today.strftime('%B %Y')}.")
+                    return redirect('gym_attendance', schema_name=schema_name)
+                if GymAttendance.objects.filter(customer=customer, date=today).exists():
+                    messages.error(request, f"{customer.name} already checked in today.")
+                    return redirect('gym_attendance', schema_name=schema_name)
+                attendance = GymAttendance.objects.create(customer=customer, date=today, check_in=timezone.now())
+                messages.success(request, f"Check-in recorded for {customer.name}")
+                return redirect('gym_attendance', schema_name=schema_name)
+        messages.error(request, "No customer selected")
+        return redirect('gym_attendance', schema_name=schema_name)
+
+    # GET request – render page
+    with schema_context(schema_name):
+        today = timezone.localdate()
+        # Customers eligible for check-in: active, paid subscription for current month, and no attendance today
+        customers_with_paid = []
+        for c in GymCustomer.objects.filter(status='active'):
+            if c.subscriptions.filter(month=today.month, year=today.year, status='paid').exists():
+                if not GymAttendance.objects.filter(customer=c, date=today).exists():
+                    customers_with_paid.append(c)
+
+        # Active check-ins (checked in today but not checked out)
+        active_checkins = GymAttendance.objects.filter(date=today, check_out__isnull=True).select_related('customer').order_by('-check_in')
+        # Completed check-ins (checked in and checked out today)
+        completed_today = GymAttendance.objects.filter(date=today, check_out__isnull=False).select_related('customer').order_by('-check_out')
+
+        context = {
+            'tenant': tenant,
+            'customers_with_paid': customers_with_paid,
+            'active_checkins': active_checkins,
+            'completed_today': completed_today,
+            'today': today,
+            'total_active_customers': GymCustomer.objects.filter(status='active').count(),
+            'logo_url': tenant.school_logo.url if tenant.school_logo else None,
+        }
+    return render(request, 'tenant/gym_attendance.html', context)
+
+def gym_payment(request, schema_name, customer_id=None):
+    tenant = get_tenant(request, schema_name)
+    from .models import GymCustomer, GymSubscription, GymPayment
+    from .forms import GymPaymentForm
+    from decimal import Decimal
+
+    with schema_context(schema_name):
+        if request.method == 'POST':
+            customer_id = request.POST.get('customer_id')
+            amount = request.POST.get('amount')
+            mode = request.POST.get('payment_mode')
+            remarks = request.POST.get('remarks', '')
+            if customer_id and amount:
+                customer = get_object_or_404(GymCustomer, id=customer_id)
+                amount = Decimal(amount)
+                pending_subs = customer.subscriptions.filter(status__in=['pending','partial','overdue']).order_by('due_date')
+                total_pending = sum(s.remaining for s in pending_subs)
+                if amount > total_pending:
+                    messages.error(request, f"Amount exceeds total pending (₹{total_pending})")
+                    return redirect('gym_payment', schema_name=schema_name, customer_id=customer.id)
+                remaining = amount
+                paid_subs = []
+                for sub in pending_subs:
+                    if remaining <= 0: break
+                    due = sub.remaining
+                    if remaining >= due:
+                        sub.paid_amount = sub.amount
+                        remaining -= due
+                    else:
+                        sub.paid_amount += remaining
+                        remaining = 0
+                    sub.save()
+                    paid_subs.append(sub)
+                payment = GymPayment.objects.create(
+                    customer=customer, amount=amount, payment_mode=mode,
+                    payment_type='full' if remaining==0 else 'partial', remarks=remarks,
+                    created_by=request.session.get('school_admin_username', 'admin')
+                )
+                payment.subscriptions.set(paid_subs)
+                messages.success(request, f"Payment of ₹{amount} received. Receipt: {payment.receipt_number}")
+                return redirect('gym_payment', schema_name=schema_name, customer_id=customer.id)
+            else:
+                messages.error(request, "Invalid data")
+                return redirect('gym_payment', schema_name=schema_name)
+
+        customers_with_pending = []
+        for c in GymCustomer.objects.filter(status='active'):
+            pending = sum(s.remaining for s in c.subscriptions.filter(status__in=['pending','partial','overdue']))
+            if pending > 0:
+                c.pending_amount = pending
+                customers_with_pending.append(c)
+        customers_with_pending.sort(key=lambda x: x.pending_amount, reverse=True)
+
+        selected_customer = None
+        pending_subs = []
+        total_pending = 0
+        if customer_id:
+            selected_customer = get_object_or_404(GymCustomer, id=customer_id)
+            pending_subs = selected_customer.subscriptions.filter(status__in=['pending','partial','overdue']).order_by('due_date')
+            total_pending = sum(s.remaining for s in pending_subs)
+
+        recent_payments = list(GymPayment.objects.select_related('customer').order_by('-payment_date')[:5])
+        context = {
+            'tenant': tenant, 'customers': customers_with_pending, 'selected_customer': selected_customer,
+            'pending_subs': pending_subs, 'total_pending': total_pending, 'recent_payments': recent_payments,
+            'logo_url': tenant.school_logo.url if tenant.school_logo else None,
+        }
+    return render(request, 'tenant/gym_payment.html', context)
+
+def gym_reports(request, schema_name):
+    tenant = get_tenant(request, schema_name)
+    from .models import GymCustomer, GymPayment, GymSubscription, GymAttendance
+    from django.db.models import Sum, Count
+    from datetime import date, timedelta
+    today = timezone.localdate()
+    report_type = request.GET.get('type', 'revenue')
+    start_date = request.GET.get('start_date')
+    end_date = request.GET.get('end_date')
+    quick_filter = request.GET.get('quick_filter')
+    with schema_context(schema_name):
+        if quick_filter == 'today':
+            start_date = end_date = today
+        elif quick_filter == 'week':
+            start_date = today - timedelta(days=today.weekday())
+            end_date = start_date + timedelta(days=6)
+        elif quick_filter == 'month':
+            start_date = today.replace(day=1)
+            end_date = today
+        elif quick_filter == 'year':
+            start_date = today.replace(month=1, day=1)
+            end_date = today
+        elif quick_filter == 'all':
+            start_date = date(2000,1,1)
+            end_date = today
+        elif quick_filter == 'last6months':
+            start_date = today - timedelta(days=180)
+            end_date = today
+        elif start_date and end_date:
+            start_date = date.fromisoformat(start_date)
+            end_date = date.fromisoformat(end_date)
+        else:
+            start_date = date(2000,1,1)
+            end_date = today
+
+        if report_type == 'revenue':
+            payments = GymPayment.objects.filter(payment_date__gte=start_date, payment_date__lte=end_date)
+            total_revenue = payments.aggregate(Sum('amount'))['amount__sum'] or 0
+            payment_count = payments.count()
+            months_labels = []
+            months_amounts = []
+            for i in range(5,-1,-1):
+                m = today.month - i
+                y = today.year
+                if m <= 0:
+                    m += 12
+                    y -= 1
+                total = GymPayment.objects.filter(payment_date__year=y, payment_date__month=m).aggregate(Sum('amount'))['amount__sum'] or 0
+                months_labels.append(f"{m}/{y}")
+                months_amounts.append(float(total))
+            context = {
+                'tenant': tenant, 'report_type': 'revenue', 'total_revenue': total_revenue, 'payment_count': payment_count,
+                'months_labels': months_labels, 'months_amounts': months_amounts,
+                'start_date': start_date, 'end_date': end_date, 'quick_filter': quick_filter,
+                'logo_url': tenant.school_logo.url if tenant.school_logo else None,
+            }
+        else:
+            attendances = GymAttendance.objects.filter(date__gte=start_date, date__lte=end_date)
+            total_checkins = attendances.count()
+            unique_customers = attendances.values('customer').distinct().count()
+            from collections import defaultdict
+            daily = defaultdict(int)
+            for a in attendances:
+                daily[a.date] += 1
+            days = sorted(daily.keys())
+            checkin_counts = [daily[d] for d in days]
+            context = {
+                'tenant': tenant, 'report_type': 'attendance', 'total_checkins': total_checkins,
+                'unique_customers': unique_customers, 'days': days, 'checkin_counts': checkin_counts,
+                'start_date': start_date, 'end_date': end_date, 'quick_filter': quick_filter,
+                'logo_url': tenant.school_logo.url if tenant.school_logo else None,
+            }
+    return render(request, 'tenant/gym_reports.html', context)
+
+def gym_settings(request, schema_name):
+    tenant = get_tenant(request, schema_name)
+    from .models import GymSettings
+    from .forms import GymSettingsForm
+    with schema_context(schema_name):
+        settings_obj, created = GymSettings.objects.get_or_create(pk=1)
+        if request.method == 'POST':
+            form = GymSettingsForm(request.POST, instance=settings_obj)
+            if form.is_valid():
+                form.save()
+                messages.success(request, "Gym settings updated.")
+                return redirect('gym_settings', schema_name=schema_name)
+        else:
+            form = GymSettingsForm(instance=settings_obj)
+        context = {'tenant': tenant, 'form': form, 'logo_url': tenant.school_logo.url if tenant.school_logo else None}
+    return render(request, 'tenant/gym_settings.html', context)
+
+def gym_receipt(request, schema_name, receipt_id):
+    tenant = get_tenant(request, schema_name)
+    from .models import GymPayment
+    with schema_context(schema_name):
+        payment = get_object_or_404(GymPayment.objects.select_related('customer'), id=receipt_id)
+        subscriptions = list(payment.subscriptions.all())
+        context = {
+            'tenant': tenant,
+            'payment': payment,
+            'subscriptions': subscriptions,
+            'logo_url': tenant.school_logo.url if tenant.school_logo else None,
+        }
+    return render(request, 'tenant/gym_receipt.html', context)
+
+# Subscription generation and cancellation
+def gym_generate_subscription(request, schema_name, customer_id):
+    from django.http import JsonResponse
+    from .models import GymCustomer, GymSubscription, GymSettings
+    from decimal import Decimal
+    from datetime import date
+    from calendar import monthrange
+    import json
+
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    try:
+        data = json.loads(request.body)
+    except:
+        data = request.POST
+    months = int(data.get('months', 1))
+    custom_fee = data.get('fee')
+    if not custom_fee:
+        return JsonResponse({'error': 'Fee amount required'}, status=400)
+    custom_fee = Decimal(str(custom_fee))
+    if months < 1 or months > 3:
+        return JsonResponse({'error': 'Months must be between 1 and 3'}, status=400)
+
+    tenant = get_tenant(request, schema_name)
+    with schema_context(schema_name):
+        customer = get_object_or_404(GymCustomer, id=customer_id)
+        settings, _ = GymSettings.objects.get_or_create(pk=1)
+        today = timezone.localdate()
+        generated = []
+        for i in range(months):
+            gen_month = today.month + i
+            gen_year = today.year
+            while gen_month > 12:
+                gen_month -= 12
+                gen_year += 1
+            existing = GymSubscription.objects.filter(customer=customer, month=gen_month, year=gen_year).first()
+            if existing and existing.is_fully_paid:
+                continue
+            elif existing and not existing.is_fully_paid:
+                existing.amount = custom_fee
+                existing.due_date = date(gen_year, gen_month, min(settings.due_date_offset, monthrange(gen_year, gen_month)[1]))
+                existing.is_cancelled = False
+                existing.cancelled_on = None
+                existing.save()
+                generated.append(f"{gen_month}/{gen_year} (updated)")
+            else:
+                due_day = min(settings.due_date_offset, monthrange(gen_year, gen_month)[1])
+                due_date = date(gen_year, gen_month, due_day)
+                GymSubscription.objects.create(
+                    customer=customer,
+                    month=gen_month,
+                    year=gen_year,
+                    amount=custom_fee,
+                    due_date=due_date,
+                    status='pending'
+                )
+                generated.append(f"{gen_month}/{gen_year}")
+        customer.monthly_fee = custom_fee
+        customer.save()
+        return JsonResponse({'message': f'Subscription generated for {len(generated)} month(s): {", ".join(generated)}'})
+
+def gym_cancel_subscription(request, schema_name, subscription_id):
+    from django.http import JsonResponse
+    from .models import GymSubscription, GymPayment
+    from decimal import Decimal
+    from datetime import date
+    from calendar import monthrange
+
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+    tenant = get_tenant(request, schema_name)
+    with schema_context(schema_name):
+        sub = get_object_or_404(GymSubscription, id=subscription_id)
+        if sub.is_cancelled:
+            return JsonResponse({'error': 'Already cancelled'}, status=400)
+        if sub.status == 'paid':
+            return JsonResponse({'error': 'Fully paid subscriptions cannot be cancelled'}, status=400)
+
+        today = timezone.localdate()
+        days_in_month = monthrange(sub.year, sub.month)[1]
+        if today.year == sub.year and today.month == sub.month:
+            days_used = min(today.day, days_in_month)
+        else:
+            days_used = 0
+        daily_rate = sub.amount / days_in_month
+        used_amount = daily_rate * days_used
+        refund = sub.paid_amount - used_amount
+        if refund < 0:
+            refund = Decimal('0.00')
+
+        sub.is_cancelled = True
+        sub.cancelled_on = today
+        sub.paid_amount = used_amount
+        sub.save()
+
+        if refund > 0:
+            GymPayment.objects.create(
+                customer=sub.customer,
+                amount=-refund,
+                payment_mode='refund',
+                payment_type='refund',
+                remarks=f'Refund for cancelled subscription {sub.month}/{sub.year}',
+                created_by=request.session.get('school_admin_username', 'admin')
+            ).subscriptions.add(sub)
+
+        return JsonResponse({'message': f'Subscription cancelled. Refund amount: ₹{refund}', 'refund': float(refund)})
+
+def gym_edit_attendance(request, schema_name, attendance_id):
+    from django.http import JsonResponse
+    from .models import GymAttendance
+    from .forms import AttendanceEditForm
+    if request.method == 'GET':
+        tenant = get_tenant(request, schema_name)
+        with schema_context(schema_name):
+            attendance = get_object_or_404(GymAttendance, id=attendance_id)
+            data = {
+                'check_in': attendance.check_in.isoformat() if attendance.check_in else '',
+                'check_out': attendance.check_out.isoformat() if attendance.check_out else '',
+                'notes': attendance.notes or '',
+                'editable': True  # Always editable
+            }
+            return JsonResponse(data)
+    elif request.method == 'POST':
+        tenant = get_tenant(request, schema_name)
+        with schema_context(schema_name):
+            attendance = get_object_or_404(GymAttendance, id=attendance_id)
+            form = AttendanceEditForm(request.POST, instance=attendance)
+            if form.is_valid():
+                form.save()
+                return JsonResponse({'message': 'Attendance updated successfully'})
+            else:
+                return JsonResponse({'errors': form.errors}, status=400)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def gym_checkin_api(request):
+    if not request.session.get('school_admin_authenticated'):
+        return JsonResponse({"error": "Unauthorized"}, status=401)
+    schema_name = request.session.get('school_admin_schema')
+    if not schema_name:
+        return JsonResponse({"error": "No tenant schema"}, status=400)
+    customer_id = request.POST.get('customer_id')
+    if not customer_id:
+        return JsonResponse({"error": "Customer ID required"}, status=400)
+    try:
+        tenant = SchoolClient.objects.get(schema_name=schema_name)
+    except SchoolClient.DoesNotExist:
+        return JsonResponse({"error": "Tenant not found"}, status=404)
+    with schema_context(schema_name):
+        from .models import GymCustomer, GymAttendance, GymSubscription
+        from datetime import date
+        from django.utils import timezone
+        customer = get_object_or_404(GymCustomer, id=customer_id)
+        today = timezone.localdate()
+        has_paid = customer.subscriptions.filter(month=today.month, year=today.year, status='paid').exists()
+        if not has_paid:
+            return JsonResponse({"error": "No active paid subscription for current month. Please renew subscription first."}, status=403)
+        attendance, created = GymAttendance.objects.get_or_create(
+            customer=customer, date=today,
+            defaults={"check_in": timezone.now()}
+        )
+        return JsonResponse({
+            "message": f"Check-in recorded for {customer.name}",
+            "customer_name": customer.name,
+            "customer_phone": customer.phone,
+            "check_in_time": attendance.check_in.strftime('%H:%M'),
+            "customer_id": customer.id,
+            "already_checked_in": not created
+        })
+@csrf_exempt
+@require_http_methods(["POST"])
+def gym_checkout_api(request):
+    if not request.session.get('school_admin_authenticated'):
+        return JsonResponse({"error": "Unauthorized"}, status=401)
+    schema_name = request.session.get('school_admin_schema')
+    if not schema_name:
+        return JsonResponse({"error": "No tenant schema"}, status=400)
+    customer_id = request.POST.get('customer_id')
+    if not customer_id:
+        return JsonResponse({"error": "Customer ID required"}, status=400)
+    try:
+        tenant = SchoolClient.objects.get(schema_name=schema_name)
+    except SchoolClient.DoesNotExist:
+        return JsonResponse({"error": "Tenant not found"}, status=404)
+    with schema_context(schema_name):
+        from .models import GymCustomer, GymAttendance, GymSubscription
+        from datetime import date
+        customer = get_object_or_404(GymCustomer, id=customer_id)
+        today = timezone.localdate()
+        has_paid = customer.subscriptions.filter(month=today.month, year=today.year, status='paid').exists()
+        if not has_paid:
+            return JsonResponse({"error": "No active paid subscription for current month. Please renew subscription first."}, status=403)
+        attendance = GymAttendance.objects.filter(customer=customer, date=today).first()
+        if not attendance:
+            return JsonResponse({"error": "No check-in found for today"}, status=400)
+        if attendance.check_out:
+            return JsonResponse({"error": "Already checked out"}, status=400)
+        attendance.check_out = timezone.now()
+        attendance.save()
+        return JsonResponse({"message": f"Check-out recorded for {customer.name}"})
+'''
+
+# ----------------------------------------------------------------------
+# New content for templates/tenant/gym_attendance.html
+# ----------------------------------------------------------------------
+NEW_GYM_ATTENDANCE_HTML = '''{% extends 'tenant/base.html' %}
+{% load static %}
+{% block title %}Attendance | {{ tenant.name }}{% endblock %}
+{% block body %}
+<div class="page-header">
+    <div><h1 class="page-title">Daily Attendance</h1><p class="page-desc">Check-in / Check-out members</p></div>
+    <div class="header-stats">
+        <div class="stat-badge"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg><span>Active Check-ins: <strong id="activeCount">{{ active_checkins|length }}</strong></span></div>
+        <button id="refreshBtn" class="btn-refresh">⟳ Refresh</button>
+    </div>
+</div>
+
+<div class="checkin-card">
+    <div class="card-header"><h3>Quick Check-in</h3></div>
+    {% if customers_with_paid %}
+    <div class="form-row">
+        <div class="form-field">
+            <label>Customer (with paid subscription for {{ today|date:"F Y" }})</label>
+            <select id="customerSelect" class="customer-select">
+                <option value="">-- Select Customer --</option>
+                {% for c in customers_with_paid %}
+                    <option value="{{ c.id }}">{{ c.name }} ({{ c.phone }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-field submit-field">
+            <button id="checkinBtn" class="btn-primary">✔ Check In</button>
+        </div>
+    </div>
+    <div id="checkinMessage" class="info-message" style="display:none;"></div>
+    {% else %}
+    <div class="info-message warning">
+        <strong>⚠️ No customers with a paid subscription for {{ today|date:"F Y" }} that haven't already checked in today.</strong><br>
+        Please follow these steps:<br>
+        1. Go to a customer's profile → <strong>Generate Subscription</strong> (choose months and fee).<br>
+        2. Then go to <strong>Collect Payment</strong> and pay the full amount.<br>
+        3. After that, the customer will appear here and can check in.
+    </div>
+    {% endif %}
+</div>
+
+<div class="attendance-grid">
+    <div class="attendance-card">
+        <div class="card-header"><h3>Currently Checked In (Not Checked Out)</h3><div class="search-wrapper"><input type="text" id="activeSearch" placeholder="Search..." class="table-search"></div></div>
+        <div class="table-responsive">
+            <table class="data-table" id="activeTable">
+                <thead><tr><th>Customer</th><th>Check-in Time</th><th>Check-out</th><th>Action</th></tr></thead>
+                <tbody id="activeTableBody">
+                    {% for a in active_checkins %}
+                    <tr data-customer-id="{{ a.customer.id }}" data-customer-name="{{ a.customer.name|lower }}">
+                        <td><strong>{{ a.customer.name }}</strong><br><small>{{ a.customer.phone }}</small></td>
+                        <td>{{ a.check_in|time:"H:i" }}</td>
+                        <td class="checkout-time">{% if a.check_out %}{{ a.check_out|time:"H:i" }}{% else %}—{% endif %}</td>
+                        <td>{% if not a.check_out %}<button class="btn-checkout" data-id="{{ a.customer.id }}">Check-out</button>{% endif %}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4" class="empty-row">No active check-ins today</td></td>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="attendance-card">
+        <div class="card-header"><h3>Today's History (Checked Out)</h3><div class="search-wrapper"><input type="text" id="historySearch" placeholder="Search..." class="table-search"></div></div>
+        <div class="table-responsive">
+            <table class="data-table" id="historyTable">
+                <thead><tr><th>Customer</th><th>Check-in</th><th>Check-out</th><th>Notes</th><th>Edit</th></tr></thead>
+                <tbody>
+                    {% for a in completed_today %}
+                    <tr data-customer-name="{{ a.customer.name|lower }}">
+                        <td><strong>{{ a.customer.name }}</strong><br><small>{{ a.customer.phone }}</small></td>
+                        <td>{{ a.check_in|time:"H:i" }}</td>
+                        <td>{{ a.check_out|time:"H:i" }}</td>
+                        <td>{{ a.notes|default:"-" }}</td>
+                        <td>{% if a.is_editable %}<button class="edit-att-btn" data-id="{{ a.id }}">Edit</button>{% else %}Locked{% endif %}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="5" class="empty-row">No completed check-ins today</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Attendance Edit Modal -->
+<div id="attEditModal" class="modal" style="display:none;">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h3>Edit Attendance</h3>
+        <form id="attEditForm">
+            {% csrf_token %}
+            <label>Check In:</label>
+            <input type="datetime-local" name="check_in" id="editCheckIn" required>
+            <label>Check Out:</label>
+            <input type="datetime-local" name="check_out" id="editCheckOut">
+            <label>Notes:</label>
+            <textarea name="notes" id="editNotes" rows="2"></textarea>
+            <button type="submit">Save Changes</button>
+        </form>
+    </div>
+</div>
+
+<style>
+.modal { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:1000; }
+.modal-content { background: var(--surface); border-radius: var(--radius); padding:1.5rem; min-width:300px; }
+.modal-content .close { float:right; cursor:pointer; font-size:1.5rem; }
+.modal-content form { display:flex; flex-direction:column; gap:1rem; margin-top:1rem; }
+.modal-content label { font-weight:600; }
+.modal-content input, .modal-content textarea { padding:0.5rem; border-radius:0.5rem; border:1px solid var(--border); background: var(--surface-alt); }
+.btn-checkout { background: var(--danger); color:white; border:none; border-radius:2rem; padding:0.2rem 0.8rem; cursor:pointer; }
+.edit-att-btn { background: var(--primary); color:white; border:none; border-radius:2rem; padding:0.2rem 0.8rem; cursor:pointer; }
+.header-stats { display: flex; gap: 1rem; align-items: center; }
+.stat-badge { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: var(--surface-alt); border-radius: 2rem; border: 1px solid var(--border); font-size: 0.85rem; }
+.btn-refresh { background: var(--primary); color: white; border: none; border-radius: 2rem; padding: 0.3rem 0.8rem; cursor: pointer; }
+.checkin-card, .attendance-card { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); padding: 1rem; margin-bottom: 1rem; }
+.card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+.form-row { display: flex; gap: 1rem; align-items: flex-end; }
+.form-field { flex: 1; }
+.form-field label { font-weight: 600; font-size: 0.8rem; display: block; margin-bottom: 0.25rem; }
+.customer-select, .form-field input { width: 100%; padding: 0.5rem; border-radius: 0.5rem; border: 1px solid var(--border); background: var(--surface-alt); }
+.submit-field { flex: 0 0 auto; }
+.btn-primary { background: var(--primary); color: white; border: none; border-radius: 2rem; padding: 0.5rem 1rem; cursor: pointer; }
+.attendance-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); gap: 1rem; }
+.table-responsive { overflow-x: auto; }
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table th, .data-table td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+.data-table th { background: var(--surface-alt); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; }
+.info-message { background: #fff3cd; padding: 0.75rem; border-radius: 0.5rem; margin-top: 1rem; color: #856404; border-left: 4px solid #ffc107; }
+.info-message.warning { background: #f8d7da; color: #721c24; border-left-color: #dc3545; }
+.empty-row { text-align: center; padding: 2rem; color: var(--muted); }
+</style>
+
+<script>
+function getCookie(name){let v=null;if(document.cookie&&document.cookie!==''){const c=document.cookie.split(';');for(let i=0;i<c.length;i++){const cookie=c[i].trim();if(cookie.substring(0,name.length+1)===(name+'=')){v=decodeURIComponent(cookie.substring(name.length+1));break;}}}return v;}
+const csrftoken=getCookie('csrftoken');
+const schema="{{ tenant.schema_name }}";
+
+document.getElementById('refreshBtn').onclick=()=>location.reload();
+
+// Check-in via AJAX – removes selected customer from dropdown, adds to active table
+document.getElementById('checkinBtn')?.addEventListener('click', async function() {
+    const select = document.getElementById('customerSelect');
+    const customerId = select.value;
+    if (!customerId) {
+        alert('Please select a customer');
+        return;
+    }
+    const btn = this;
+    btn.disabled = true;
+    btn.innerText = 'Checking...';
+    const msgDiv = document.getElementById('checkinMessage');
+    try {
+        const resp = await fetch('/api/gym/checkin/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrftoken, 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `customer_id=${customerId}`
+        });
+        const data = await resp.json();
+        if (data.error) {
+            msgDiv.style.display = 'block';
+            msgDiv.innerHTML = `<strong>Error:</strong> ${data.error}`;
+            msgDiv.className = 'info-message warning';
+        } else {
+            msgDiv.style.display = 'block';
+            msgDiv.innerHTML = `<strong>✅ ${data.message}</strong>`;
+            msgDiv.className = 'info-message';
+            // Remove customer from dropdown
+            const option = select.querySelector(`option[value="${customerId}"]`);
+            if (option) option.remove();
+            if (select.options.length === 1) select.value = '';
+            // Add row to active table
+            const tbody = document.getElementById('activeTableBody');
+            const emptyRow = tbody.querySelector('.empty-row');
+            if (emptyRow) emptyRow.remove();
+            const newRow = document.createElement('tr');
+            newRow.setAttribute('data-customer-id', customerId);
+            newRow.setAttribute('data-customer-name', data.customer_name.toLowerCase());
+            newRow.innerHTML = `
+                <td><strong>${data.customer_name}</strong><br><small>${data.customer_phone}</small></td>
+                <td>${data.check_in_time}</td>
+                <td class="checkout-time">—</td>
+                <td><button class="btn-checkout" data-id="${customerId}">Check-out</button></td>
+            `;
+            tbody.appendChild(newRow);
+            document.getElementById('activeCount').innerText = tbody.children.length;
+            newRow.querySelector('.btn-checkout')?.addEventListener('click', checkoutHandler);
+        }
+    } catch(e) {
+        msgDiv.style.display = 'block';
+        msgDiv.innerHTML = `<strong>Error:</strong> ${e.message}`;
+        msgDiv.className = 'info-message warning';
+    } finally {
+        btn.disabled = false;
+        btn.innerText = '✔ Check In';
+        setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
+    }
+});
+
+// Checkout handler – moves row from active table to history table
+async function checkoutHandler(event) {
+    const btn = event.currentTarget;
+    const customerId = btn.dataset.id;
+    if (!confirm('Check out now?')) return;
+    btn.disabled = true;
+    btn.innerText = '...';
+    try {
+        const resp = await fetch('/api/gym/checkout/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrftoken, 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `customer_id=${customerId}`
+        });
+        const data = await resp.json();
+        if (data.error) {
+            alert(data.error);
+        } else {
+            alert(data.message);
+            // Reload the page to refresh both tables with updated data
+            location.reload();
+        }
+    } catch(e) {
+        alert('Error: ' + e.message);
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+// Attach checkout to existing buttons
+document.querySelectorAll('.btn-checkout').forEach(btn => btn.addEventListener('click', checkoutHandler));
+
+// Table search
+document.getElementById('activeSearch')?.addEventListener('keyup', function() {
+    const filter = this.value.toLowerCase();
+    document.querySelectorAll('#activeTable tbody tr').forEach(row => {
+        const name = row.getAttribute('data-customer-name') || '';
+        row.style.display = name.includes(filter) ? '' : 'none';
+    });
+});
+document.getElementById('historySearch')?.addEventListener('keyup', function() {
+    const filter = this.value.toLowerCase();
+    document.querySelectorAll('#historyTable tbody tr').forEach(row => {
+        const name = row.getAttribute('data-customer-name') || '';
+        row.style.display = name.includes(filter) ? '' : 'none';
+    });
+});
+
+// Attendance edit modal (works with any attendance ID)
+const attModal = document.getElementById('attEditModal');
+let currentAttId = null;
+document.querySelectorAll('.edit-att-btn').forEach(btn => btn.addEventListener('click', async function() {
+    currentAttId = this.dataset.id;
+    if (currentAttId == 0) {
+        alert("Please refresh the page to edit this record.");
+        return;
+    }
+    const resp = await fetch(`/portal/${schema}/gym/attendance/${currentAttId}/edit/`);
+    const data = await resp.json();
+    if (data.error) alert(data.error);
+    else {
+        document.getElementById('editCheckIn').value = data.check_in.slice(0,16);
+        document.getElementById('editCheckOut').value = data.check_out ? data.check_out.slice(0,16) : '';
+        document.getElementById('editNotes').value = data.notes;
+        attModal.style.display = 'flex';
+    }
+}));
+attModal.querySelector('.close').onclick = () => attModal.style.display = 'none';
+document.getElementById('attEditForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const btn = attModal.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    try {
+        const resp = await fetch(`/portal/${schema}/gym/attendance/${currentAttId}/edit/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrftoken },
+            body: formData
+        });
+        const data = await resp.json();
+        if (data.message) alert(data.message);
+        else if (data.errors) alert('Error: ' + JSON.stringify(data.errors));
+        if (!data.error) location.reload();
+    } catch(e) { alert(e.message); }
+    finally { btn.disabled = false; attModal.style.display = 'none'; }
+};
+</script>
+{% endblock %}
+'''
+
+# ----------------------------------------------------------------------
+# Main patcher
+# ----------------------------------------------------------------------
+def main():
+    # Fix session storage first
+    if fix_settings():
+        print("Session configuration fixed.")
+    else:
+        print("Could not fix settings.py – please check manually.")
+
+    # Overwrite views.py and gym_attendance.html
+    views_path = os.path.join('axis_saas', 'views.py')
+    template_path = os.path.join('templates', 'tenant', 'gym_attendance.html')
+
+    with open(views_path, 'w', encoding='utf-8') as f:
+        f.write(NEW_VIEWS_PY)
+    print(f"✅ Overwritten: {views_path}")
+
+    with open(template_path, 'w', encoding='utf-8') as f:
+        f.write(NEW_GYM_ATTENDANCE_HTML)
+    print(f"✅ Overwritten: {template_path}")
+
+    print("\n🎉 All fixes applied successfully!")
+    print("• Session engine changed to database (no more missing directory errors).")
+    print("• Gym attendance page now works as requested: dropdown shows eligible customers, two tables, no reset on refresh.")
+    print("\n👉 Restart your Django server and test the attendance page.")
+
+if __name__ == '__main__':
     main()

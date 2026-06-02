@@ -3,9 +3,9 @@
 {% block title %}Attendance | {{ tenant.name }}{% endblock %}
 {% block body %}
 <div class="page-header">
-    <div><h1 class="page-title">Daily Attendance</h1><p class="page-desc">Check-in / Check-out members (editable within 7 hours)</p></div>
+    <div><h1 class="page-title">Daily Attendance</h1><p class="page-desc">Check-in / Check-out members</p></div>
     <div class="header-stats">
-        <div class="stat-badge"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg><span>Today: <strong id="todayCount">{{ checkins_today|length }}</strong> check-ins</span></div>
+        <div class="stat-badge"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg><span>Active Check-ins: <strong id="activeCount">{{ active_checkins|length }}</strong></span></div>
         <button id="refreshBtn" class="btn-refresh">⟳ Refresh</button>
     </div>
 </div>
@@ -30,7 +30,7 @@
     <div id="checkinMessage" class="info-message" style="display:none;"></div>
     {% else %}
     <div class="info-message warning">
-        <strong>⚠️ No customers with a paid subscription for {{ today|date:"F Y" }}.</strong><br>
+        <strong>⚠️ No customers with a paid subscription for {{ today|date:"F Y" }} that haven't already checked in today.</strong><br>
         Please follow these steps:<br>
         1. Go to a customer's profile → <strong>Generate Subscription</strong> (choose months and fee).<br>
         2. Then go to <strong>Collect Payment</strong> and pay the full amount.<br>
@@ -41,12 +41,12 @@
 
 <div class="attendance-grid">
     <div class="attendance-card">
-        <div class="card-header"><h3>Today's Check-ins</h3><div class="search-wrapper"><input type="text" id="todaySearch" placeholder="Search..." class="table-search"></div></div>
+        <div class="card-header"><h3>Currently Checked In (Not Checked Out)</h3><div class="search-wrapper"><input type="text" id="activeSearch" placeholder="Search..." class="table-search"></div></div>
         <div class="table-responsive">
-            <table class="data-table" id="todayTable">
+            <table class="data-table" id="activeTable">
                 <thead><tr><th>Customer</th><th>Check-in Time</th><th>Check-out</th><th>Action</th></tr></thead>
-                <tbody id="todayTableBody">
-                    {% for a in checkins_today %}
+                <tbody id="activeTableBody">
+                    {% for a in active_checkins %}
                     <tr data-customer-id="{{ a.customer.id }}" data-customer-name="{{ a.customer.name|lower }}">
                         <td><strong>{{ a.customer.name }}</strong><br><small>{{ a.customer.phone }}</small></td>
                         <td>{{ a.check_in|time:"H:i" }}</td>
@@ -54,36 +54,34 @@
                         <td>{% if not a.check_out %}<button class="btn-checkout" data-id="{{ a.customer.id }}">Check-out</button>{% endif %}</td>
                     </tr>
                     {% empty %}
-                    <tr><td colspan="4" class="empty-row">No check-ins today</td></tr>
+                    <tr><td colspan="4" class="empty-row">No active check-ins today</td></td>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
     </div>
     <div class="attendance-card">
-        <div class="card-header"><h3>Last 7 Days Attendance</h3><div class="search-wrapper"><input type="text" id="recentSearch" placeholder="Search..." class="table-search"></div></div>
+        <div class="card-header"><h3>Today's History (Checked Out)</h3><div class="search-wrapper"><input type="text" id="historySearch" placeholder="Search..." class="table-search"></div></div>
         <div class="table-responsive">
-            <table class="data-table" id="recentTable">
-                <thead><tr><th>Date</th><th>Customer</th><th>Check-in</th><th>Check-out</th><th>Edit</th></tr></thead>
+            <table class="data-table" id="historyTable">
+                <thead><tr><th>Customer</th><th>Check-in</th><th>Check-out</th><th>Notes</th><th>Edit</th></tr></thead>
                 <tbody>
-                    {% for a in recent_attendance %}
+                    {% for a in completed_today %}
                     <tr data-customer-name="{{ a.customer.name|lower }}">
-                        <td>{{ a.date|date:"Y-m-d" }}</td>
                         <td><strong>{{ a.customer.name }}</strong><br><small>{{ a.customer.phone }}</small></td>
                         <td>{{ a.check_in|time:"H:i" }}</td>
-                        <td>{{ a.check_out|time:"H:i"|default:"-" }}</td>
+                        <td>{{ a.check_out|time:"H:i" }}</td>
+                        <td>{{ a.notes|default:"-" }}</td>
                         <td>{% if a.is_editable %}<button class="edit-att-btn" data-id="{{ a.id }}">Edit</button>{% else %}Locked{% endif %}</td>
                     </tr>
                     {% empty %}
-                    <tr><td colspan="5" class="empty-row">No recent attendance</td></tr>
+                    <tr><td colspan="5" class="empty-row">No completed check-ins today</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
     </div>
 </div>
-
-<div class="chart-card"><canvas id="attendanceTrend" height="100"></canvas></div>
 
 <!-- Attendance Edit Modal -->
 <div id="attEditModal" class="modal" style="display:none;">
@@ -103,24 +101,6 @@
     </div>
 </div>
 
-<!-- Debug Info (only if dropdown empty) -->
-{% if not customers_with_paid %}
-<div class="debug-card">
-    <details>
-        <summary>🔍 Debug Info – Why is the dropdown empty?</summary>
-        <p><strong>Current month:</strong> {{ today|date:"F Y" }}</p>
-        <p><strong>Active customers in database:</strong> {{ total_active_customers }} – <a href="{% url 'gym_customer_list' schema_name=tenant.schema_name %}">view list</a></p>
-        <p><strong>To enable check-in for a customer, you must:</strong></p>
-        <ol>
-            <li>Have a <strong>GymSubscription</strong> record for <strong>{{ today|date:"F Y" }}</strong> with status = "paid".</li>
-            <li>You can generate a subscription from the customer's profile, then collect payment.</li>
-        </ol>
-        <p><em>For quick testing, run:</em></p>
-        <pre>python3 manage.py force_paid_subscription --tenant={{ tenant.schema_name }} --customer_id=1 --amount=500</pre>
-    </details>
-</div>
-{% endif %}
-
 <style>
 .modal { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:1000; }
 .modal-content { background: var(--surface); border-radius: var(--radius); padding:1.5rem; min-width:300px; }
@@ -133,7 +113,7 @@
 .header-stats { display: flex; gap: 1rem; align-items: center; }
 .stat-badge { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: var(--surface-alt); border-radius: 2rem; border: 1px solid var(--border); font-size: 0.85rem; }
 .btn-refresh { background: var(--primary); color: white; border: none; border-radius: 2rem; padding: 0.3rem 0.8rem; cursor: pointer; }
-.checkin-card, .attendance-card, .chart-card, .debug-card { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); padding: 1rem; margin-bottom: 1rem; }
+.checkin-card, .attendance-card { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); padding: 1rem; margin-bottom: 1rem; }
 .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
 .form-row { display: flex; gap: 1rem; align-items: flex-end; }
 .form-field { flex: 1; }
@@ -141,15 +121,13 @@
 .customer-select, .form-field input { width: 100%; padding: 0.5rem; border-radius: 0.5rem; border: 1px solid var(--border); background: var(--surface-alt); }
 .submit-field { flex: 0 0 auto; }
 .btn-primary { background: var(--primary); color: white; border: none; border-radius: 2rem; padding: 0.5rem 1rem; cursor: pointer; }
-.attendance-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1rem; }
+.attendance-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); gap: 1rem; }
 .table-responsive { overflow-x: auto; }
 .data-table { width: 100%; border-collapse: collapse; }
 .data-table th, .data-table td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
 .data-table th { background: var(--surface-alt); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; }
 .info-message { background: #fff3cd; padding: 0.75rem; border-radius: 0.5rem; margin-top: 1rem; color: #856404; border-left: 4px solid #ffc107; }
 .info-message.warning { background: #f8d7da; color: #721c24; border-left-color: #dc3545; }
-.debug-card details { font-size: 0.85rem; }
-.debug-card pre { background: #f4f4f4; padding: 0.5rem; border-radius: 4px; overflow-x: auto; }
 .empty-row { text-align: center; padding: 2rem; color: var(--muted); }
 </style>
 
@@ -158,10 +136,9 @@ function getCookie(name){let v=null;if(document.cookie&&document.cookie!==''){co
 const csrftoken=getCookie('csrftoken');
 const schema="{{ tenant.schema_name }}";
 
-// Refresh page
 document.getElementById('refreshBtn').onclick=()=>location.reload();
 
-// Check-in via AJAX
+// Check-in via AJAX – removes selected customer from dropdown, adds to active table
 document.getElementById('checkinBtn')?.addEventListener('click', async function() {
     const select = document.getElementById('customerSelect');
     const customerId = select.value;
@@ -188,8 +165,12 @@ document.getElementById('checkinBtn')?.addEventListener('click', async function(
             msgDiv.style.display = 'block';
             msgDiv.innerHTML = `<strong>✅ ${data.message}</strong>`;
             msgDiv.className = 'info-message';
-            // Add new row to Today's Check-ins table
-            const tbody = document.getElementById('todayTableBody');
+            // Remove customer from dropdown
+            const option = select.querySelector(`option[value="${customerId}"]`);
+            if (option) option.remove();
+            if (select.options.length === 1) select.value = '';
+            // Add row to active table
+            const tbody = document.getElementById('activeTableBody');
             const emptyRow = tbody.querySelector('.empty-row');
             if (emptyRow) emptyRow.remove();
             const newRow = document.createElement('tr');
@@ -202,16 +183,7 @@ document.getElementById('checkinBtn')?.addEventListener('click', async function(
                 <td><button class="btn-checkout" data-id="${customerId}">Check-out</button></td>
             `;
             tbody.appendChild(newRow);
-            // Update count
-            document.getElementById('todayCount').innerText = tbody.children.length;
-            // Remove customer from dropdown
-            select.querySelector(`option[value="${customerId}"]`).remove();
-            if (select.options.length === 1) {
-                // No more customers
-                const card = document.querySelector('.checkin-card');
-                card.innerHTML = '<div class="info-message warning">No more customers with paid subscription for today.</div>';
-            }
-            // Attach checkout event to the new button
+            document.getElementById('activeCount').innerText = tbody.children.length;
             newRow.querySelector('.btn-checkout')?.addEventListener('click', checkoutHandler);
         }
     } catch(e) {
@@ -225,7 +197,7 @@ document.getElementById('checkinBtn')?.addEventListener('click', async function(
     }
 });
 
-// Checkout handler (shared)
+// Checkout handler – moves row from active table to history table
 async function checkoutHandler(event) {
     const btn = event.currentTarget;
     const customerId = btn.dataset.id;
@@ -243,13 +215,8 @@ async function checkoutHandler(event) {
             alert(data.error);
         } else {
             alert(data.message);
-            // Update the row: remove checkout button, set checkout time
-            const row = btn.closest('tr');
-            const checkoutCell = row.querySelector('.checkout-time');
-            const now = new Date();
-            const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            checkoutCell.innerText = timeStr;
-            btn.remove();
+            // Reload the page to refresh both tables with updated data
+            location.reload();
         }
     } catch(e) {
         alert('Error: ' + e.message);
@@ -262,26 +229,30 @@ async function checkoutHandler(event) {
 document.querySelectorAll('.btn-checkout').forEach(btn => btn.addEventListener('click', checkoutHandler));
 
 // Table search
-document.getElementById('todaySearch')?.addEventListener('keyup', function() {
+document.getElementById('activeSearch')?.addEventListener('keyup', function() {
     const filter = this.value.toLowerCase();
-    document.querySelectorAll('#todayTable tbody tr').forEach(row => {
+    document.querySelectorAll('#activeTable tbody tr').forEach(row => {
         const name = row.getAttribute('data-customer-name') || '';
         row.style.display = name.includes(filter) ? '' : 'none';
     });
 });
-document.getElementById('recentSearch')?.addEventListener('keyup', function() {
+document.getElementById('historySearch')?.addEventListener('keyup', function() {
     const filter = this.value.toLowerCase();
-    document.querySelectorAll('#recentTable tbody tr').forEach(row => {
+    document.querySelectorAll('#historyTable tbody tr').forEach(row => {
         const name = row.getAttribute('data-customer-name') || '';
         row.style.display = name.includes(filter) ? '' : 'none';
     });
 });
 
-// Attendance edit modal (unchanged, works with existing backend)
+// Attendance edit modal (works with any attendance ID)
 const attModal = document.getElementById('attEditModal');
 let currentAttId = null;
 document.querySelectorAll('.edit-att-btn').forEach(btn => btn.addEventListener('click', async function() {
     currentAttId = this.dataset.id;
+    if (currentAttId == 0) {
+        alert("Please refresh the page to edit this record.");
+        return;
+    }
     const resp = await fetch(`/portal/${schema}/gym/attendance/${currentAttId}/edit/`);
     const data = await resp.json();
     if (data.error) alert(data.error);
@@ -311,24 +282,5 @@ document.getElementById('attEditForm').onsubmit = async (e) => {
     } catch(e) { alert(e.message); }
     finally { btn.disabled = false; attModal.style.display = 'none'; }
 };
-
-// Chart for last 7 days trend
-const ctx = document.getElementById('attendanceTrend')?.getContext('2d');
-if(ctx) {
-    const last7Days = {};
-    document.querySelectorAll('#recentTable tbody tr').forEach(row => {
-        const dateCell = row.cells[0];
-        if(dateCell) {
-            const date = dateCell.innerText;
-            last7Days[date] = (last7Days[date] || 0) + 1;
-        }
-    });
-    const dates = Object.keys(last7Days).sort().slice(-7);
-    const counts = dates.map(d => last7Days[d]);
-    new Chart(ctx, {
-        type: 'line',
-        data: { labels: dates, datasets: [{ label: 'Check-ins', data: counts, borderColor: '#3b82f6', fill: true }] }
-    });
-}
 </script>
 {% endblock %}

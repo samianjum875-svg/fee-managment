@@ -122,7 +122,7 @@ DATABASE_ROUTERS = (
 # Security
 SESSION_COOKIE_DOMAIN = None
 CSRF_COOKIE_DOMAIN = None
-SESSION_ENGINE = 'django.contrib.sessions.backends.file'
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 SESSION_SAVE_EVERY_REQUEST = False
 CSRF_TRUSTED_ORIGINS = ['https://*.hf.space', 'http://localhost:8000']
 SESSION_COOKIE_PATH = '/'
