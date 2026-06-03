@@ -7,7 +7,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 
 from .models import SchoolClient
 
-from .views import gym_generate_subscription, gym_cancel_subscription, gym_edit_attendance, add_student, dashboard, debug_payments_api, defaulters, edit_student, family_payment, fee_collection, fee_receipt, fee_settings, fee_status_api, fee_structure, gym_attendance, gym_checkin_api, gym_checkout_api, gym_customer_add, gym_customer_edit, gym_customer_list, gym_customer_profile, gym_dashboard, gym_payment, gym_receipt, gym_reports, gym_settings, manual_generate_api, manual_generate_single_api, reports, settings, student_fee_records_api, student_list, student_payments_api, student_profile, student_search_api, gym_revenue_stats_api, gym_attendance_stats_api, gym_customers_list_api, gym_customer_detail_api, gym_subscription_status_api
+from .views import gym_generate_subscription, gym_cancel_subscription, gym_edit_attendance, add_student, dashboard, debug_payments_api, defaulters, edit_student, family_payment, fee_collection, fee_receipt, fee_settings, fee_status_api, fee_structure, gym_attendance, gym_checkin_api, gym_checkout_api, gym_customer_add, gym_customer_edit, gym_customer_list, gym_customer_profile, gym_dashboard, gym_payment, gym_receipt, gym_reports, gym_settings, manual_generate_api, manual_generate_single_api, reports, settings, student_fee_records_api, student_list, student_payments_api, student_profile, student_search_api, gym_revenue_stats_api, gym_attendance_stats_api, gym_customers_list_api, gym_customer_detail_api, gym_subscription_status_api, gym_attendance_data_api, gym_eligible_customers_api, gym_search_customer_api, gym_export_attendance_api
 
 def saas_homepage(request):
     return HttpResponse('''
@@ -180,4 +180,14 @@ urlpatterns = [
     path('api/gym/subscription-status/<slug:schema_name>/', gym_subscription_status_api, name='gym_subscription_status_api'),
     
     path('portal/<slug:schema_name>/gym/settings/', gym_settings_view, name='gym_settings'),
+
+    path('api/gym/attendance-data/<slug:schema_name>/', gym_attendance_data_api, name='gym_attendance_data_api'),
+
+    path('api/gym/eligible-customers/<slug:schema_name>/', gym_eligible_customers_api, name='gym_eligible_customers_api'),
+
+    path('api/gym/search-customer/<slug:schema_name>/', gym_search_customer_api, name='gym_search_customer_api'),
+
+    path('api/gym/export-attendance/<slug:schema_name>/', gym_export_attendance_api, name='gym_export_attendance_api'),
+
+    path('api/gym/attendance/<int:attendance_id>/edit/', gym_edit_attendance, name='gym_edit_attendance_api'),
 ]

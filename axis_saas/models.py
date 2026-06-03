@@ -188,6 +188,8 @@ class GymCustomer(models.Model):
         ('male', 'Male'),
         ('female', 'Female'),
     ]
+    barcode = models.CharField(max_length=50, unique=True, blank=True, null=True)
+
     name = models.CharField(max_length=150)
     phone = models.CharField(max_length=15)
     email = models.EmailField(blank=True, null=True)
@@ -302,6 +304,8 @@ class GymAttendance(models.Model):
             self.date = timezone.localdate(self.check_in)
         super().save(*args, **kwargs)
 
+
+    duration_minutes = models.PositiveIntegerField(null=True, blank=True, help_text="Duration in minutes")
 
     class Meta:
         unique_together = ['customer', 'date']

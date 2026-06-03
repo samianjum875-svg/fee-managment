@@ -1,94 +1,94 @@
 {% extends 'tenant/base.html' %}
 {% load static %}
-{% block title %}Attendance | {{ tenant.name }}{% endblock %}
+{% block title %}Smart Attendance | {{ tenant.name }}{% endblock %}
+{% block extra_head %}
+<style>
+    /* Modern Attendance Styles */
+    .attendance-container { display: flex; flex-direction: column; gap: 1.5rem; }
+    .stats-row { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    .stat-card { background: var(--surface); border-radius: var(--radius); padding: 0.75rem 1rem; border: 1px solid var(--border); flex: 1; min-width: 120px; }
+    .stat-value { font-size: 1.8rem; font-weight: 700; }
+    .stat-label { font-size: 0.7rem; text-transform: uppercase; color: var(--muted); }
+    .checkin-panel { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); padding: 1.25rem; }
+    .checkin-input-group { display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap; }
+    .barcode-input { flex: 2; min-width: 200px; }
+    .barcode-input input { width: 100%; padding: 0.6rem 1rem; border-radius: 2rem; border: 1px solid var(--border); background: var(--surface-alt); font-family: monospace; font-size: 1.1rem; }
+    .customer-select { flex: 1; min-width: 180px; }
+    .checkin-actions { display: flex; gap: 0.5rem; }
+    .btn-icon { background: var(--surface-alt); border: 1px solid var(--border); border-radius: 2rem; padding: 0.5rem 1rem; cursor: pointer; }
+    .active-table, .history-table { width: 100%; border-collapse: collapse; }
+    .active-table th, .active-table td, .history-table th, .history-table td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+    .active-table th { background: var(--surface-alt); font-weight: 600; }
+    .timer { font-family: monospace; font-weight: 600; color: var(--primary); }
+    .checkout-btn { background: var(--danger); color: white; border: none; border-radius: 2rem; padding: 0.2rem 0.8rem; cursor: pointer; }
+    .edit-btn { background: var(--primary); color: white; border: none; border-radius: 2rem; padding: 0.2rem 0.8rem; cursor: pointer; }
+    .export-btn { background: #10b981; color: white; border: none; border-radius: 2rem; padding: 0.4rem 1rem; cursor: pointer; }
+    .modal { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:1000; visibility: hidden; opacity:0; transition: all 0.2s; }
+    .modal.show { visibility: visible; opacity:1; }
+    .modal-content { background: var(--surface); border-radius: var(--radius); padding: 1.5rem; min-width: 320px; }
+    .modal-content input, .modal-content textarea { width: 100%; padding: 0.5rem; margin: 0.5rem 0; border-radius: 0.5rem; border: 1px solid var(--border); background: var(--surface-alt); }
+    .toast { position: fixed; bottom: 20px; right: 20px; background: #333; color: white; padding: 0.75rem 1.5rem; border-radius: 2rem; z-index: 2000; display: none; }
+</style>
+{% endblock %}
 {% block body %}
-<div class="page-header">
-    <div><h1 class="page-title">Daily Attendance</h1><p class="page-desc">Check-in / Check-out members</p></div>
-    <div class="header-stats">
-        <div class="stat-badge"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg><span>Active Check-ins: <strong id="activeCount">{{ active_checkins|length }}</strong></span></div>
-        <button id="refreshBtn" class="btn-refresh">⟳ Refresh</button>
+<div class="attendance-container">
+    <!-- Stats Row -->
+    <div class="stats-row">
+        <div class="stat-card"><div class="stat-value" id="todayCheckins">0</div><div class="stat-label">Today's Check-ins</div></div>
+        <div class="stat-card"><div class="stat-value" id="activeNow">0</div><div class="stat-label">Currently Inside</div></div>
+        <div class="stat-card"><div class="stat-value" id="uniqueToday">0</div><div class="stat-label">Unique Customers</div></div>
+        <div class="stat-card"><button id="exportCsvBtn" class="export-btn">📥 Export Today (CSV)</button></div>
     </div>
-</div>
 
-<div class="checkin-card">
-    <div class="card-header"><h3>Quick Check-in</h3></div>
-    {% if customers_with_paid %}
-    <div class="form-row">
-        <div class="form-field">
-            <label>Customer (with paid subscription for {{ today|date:"F Y" }})</label>
-            <select id="customerSelect" class="customer-select">
-                <option value="">-- Select Customer --</option>
-                {% for c in customers_with_paid %}
-                    <option value="{{ c.id }}">{{ c.name }} ({{ c.phone }})</option>
-                {% endfor %}
-            </select>
+    <!-- Check-in Panel -->
+    <div class="checkin-panel">
+        <h3>Quick Check-in</h3>
+        <div class="checkin-input-group">
+            <div class="barcode-input">
+                <input type="text" id="barcodeInput" placeholder="Scan barcode or enter phone/name" autocomplete="off">
+            </div>
+            <div class="customer-select">
+                <select id="customerSelect">
+                    <option value="">-- Or select customer --</option>
+                </select>
+            </div>
+            <div class="checkin-actions">
+                <button id="checkinBtn" class="btn-primary">✔ Check In</button>
+                <button id="refreshBtn" class="btn-icon">⟳</button>
+            </div>
         </div>
-        <div class="form-field submit-field">
-            <button id="checkinBtn" class="btn-primary">✔ Check In</button>
-        </div>
+        <div id="checkinMessage" class="info-message" style="display:none;"></div>
     </div>
-    <div id="checkinMessage" class="info-message" style="display:none;"></div>
-    {% else %}
-    <div class="info-message warning">
-        <strong>⚠️ No customers with a paid subscription for {{ today|date:"F Y" }} that haven't already checked in today.</strong><br>
-        Please follow these steps:<br>
-        1. Go to a customer's profile → <strong>Generate Subscription</strong> (choose months and fee).<br>
-        2. Then go to <strong>Collect Payment</strong> and pay the full amount.<br>
-        3. After that, the customer will appear here and can check in.
-    </div>
-    {% endif %}
-</div>
 
-<div class="attendance-grid">
-    <div class="attendance-card">
-        <div class="card-header"><h3>Currently Checked In (Not Checked Out)</h3><div class="search-wrapper"><input type="text" id="activeSearch" placeholder="Search..." class="table-search"></div></div>
+    <!-- Active Check-ins (Live) -->
+    <div class="checkin-panel">
+        <h3>Currently Inside Gym</h3>
         <div class="table-responsive">
-            <table class="data-table" id="activeTable">
-                <thead><tr><th>Customer</th><th>Check-in Time</th><th>Check-out</th><th>Action</th></tr></thead>
-                <tbody id="activeTableBody">
-                    {% for a in active_checkins %}
-                    <tr data-customer-id="{{ a.customer.id }}" data-customer-name="{{ a.customer.name|lower }}">
-                        <td><strong>{{ a.customer.name }}</strong><br><small>{{ a.customer.phone }}</small></td>
-                        <td>{{ a.check_in|time:"H:i" }}</td>
-                        <td class="checkout-time">{% if a.check_out %}{{ a.check_out|time:"H:i" }}{% else %}—{% endif %}</td>
-                        <td>{% if not a.check_out %}<button class="btn-checkout" data-id="{{ a.customer.id }}">Check-out</button>{% endif %}</td>
-                    </tr>
-                    {% empty %}
-                    <tr><td colspan="4" class="empty-row">No active check-ins today</td></tr>
-                    {% endfor %}
-                </tbody>
+            <table class="active-table" id="activeTable">
+                <thead><tr><th>Customer</th><th>Check-in Time</th><th>Duration</th><th>Action</th></tr></thead>
+                <tbody id="activeTableBody"><tr><td colspan="4" class="empty-row">Loading...</td></tr></tbody>
             </table>
         </div>
     </div>
-    <div class="attendance-card">
-        <div class="card-header"><h3>Today's History (Checked Out)</h3><div class="search-wrapper"><input type="text" id="historySearch" placeholder="Search..." class="table-search"></div></div>
+
+    <!-- Today's History (Checked Out) -->
+    <div class="checkin-panel">
+        <h3>Today's History</h3>
         <div class="table-responsive">
-            <table class="data-table" id="historyTable">
-                <thead><tr><th>Customer</th><th>Check-in</th><th>Check-out</th><th>Notes</th><th>Edit</th></tr></thead>
-                <tbody>
-                    {% for a in completed_today %}
-                    <tr data-customer-name="{{ a.customer.name|lower }}">
-                        <td><strong>{{ a.customer.name }}</strong><br><small>{{ a.customer.phone }}</small></td>
-                        <td>{{ a.check_in|time:"H:i" }}</td>
-                        <td>{{ a.check_out|time:"H:i" }}</td>
-                        <td>{{ a.notes|default:"-" }}</td>
-                        <td>{% if a.is_editable %}<button class="edit-att-btn" data-id="{{ a.id }}">Edit</button>{% else %}Locked{% endif %}</td>
-                    </tr>
-                    {% empty %}
-                    <tr><td colspan="5" class="empty-row">No completed check-ins today</td></tr>
-                    {% endfor %}
-                </tbody>
+            <table class="history-table" id="historyTable">
+                <thead><tr><th>Customer</th><th>Check-in</th><th>Check-out</th><th>Duration</th><th>Notes</th><th></th></tr></thead>
+                <tbody id="historyTableBody"><tr><td colspan="6" class="empty-row">No records yet</td></tr></tbody>
             </table>
         </div>
     </div>
 </div>
 
-<!-- Attendance Edit Modal -->
-<div id="attEditModal" class="modal" style="display:none;">
+<!-- Edit Modal -->
+<div id="editModal" class="modal">
     <div class="modal-content">
-        <span class="close">&times;</span>
+        <span class="close" style="float:right; cursor:pointer;">&times;</span>
         <h3>Edit Attendance</h3>
-        <form id="attEditForm">
+        <form id="editForm">
             {% csrf_token %}
             <label>Check In:</label>
             <input type="datetime-local" name="check_in" id="editCheckIn" required>
@@ -96,234 +96,252 @@
             <input type="datetime-local" name="check_out" id="editCheckOut">
             <label>Notes:</label>
             <textarea name="notes" id="editNotes" rows="2"></textarea>
-            <button type="submit">Save Changes</button>
+            <button type="submit" class="btn-primary">Save Changes</button>
         </form>
     </div>
 </div>
 
-<style>
-.modal { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:1000; }
-.modal-content { background: var(--surface); border-radius: var(--radius); padding:1.5rem; min-width:300px; }
-.modal-content .close { float:right; cursor:pointer; font-size:1.5rem; }
-.modal-content form { display:flex; flex-direction:column; gap:1rem; margin-top:1rem; }
-.modal-content label { font-weight:600; }
-.modal-content input, .modal-content textarea { padding:0.5rem; border-radius:0.5rem; border:1px solid var(--border); background: var(--surface-alt); }
-.btn-checkout { background: var(--danger); color:white; border:none; border-radius:2rem; padding:0.2rem 0.8rem; cursor:pointer; }
-.edit-att-btn { background: var(--primary); color:white; border:none; border-radius:2rem; padding:0.2rem 0.8rem; cursor:pointer; }
-.header-stats { display: flex; gap: 1rem; align-items: center; }
-.stat-badge { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: var(--surface-alt); border-radius: 2rem; border: 1px solid var(--border); font-size: 0.85rem; }
-.btn-refresh { background: var(--primary); color: white; border: none; border-radius: 2rem; padding: 0.3rem 0.8rem; cursor: pointer; }
-.checkin-card, .attendance-card { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); padding: 1rem; margin-bottom: 1rem; }
-.card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-.form-row { display: flex; gap: 1rem; align-items: flex-end; }
-.form-field { flex: 1; }
-.form-field label { font-weight: 600; font-size: 0.8rem; display: block; margin-bottom: 0.25rem; }
-.customer-select, .form-field input { width: 100%; padding: 0.5rem; border-radius: 0.5rem; border: 1px solid var(--border); background: var(--surface-alt); }
-.submit-field { flex: 0 0 auto; }
-.btn-primary { background: var(--primary); color: white; border: none; border-radius: 2rem; padding: 0.5rem 1rem; cursor: pointer; }
-.attendance-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); gap: 1rem; }
-.table-responsive { overflow-x: auto; }
-.data-table { width: 100%; border-collapse: collapse; }
-.data-table th, .data-table td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
-.data-table th { background: var(--surface-alt); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; }
-.info-message { background: #fff3cd; padding: 0.75rem; border-radius: 0.5rem; margin-top: 1rem; color: #856404; border-left: 4px solid #ffc107; }
-.info-message.warning { background: #f8d7da; color: #721c24; border-left-color: #dc3545; }
-.empty-row { text-align: center; padding: 2rem; color: var(--muted); }
-</style>
+<div id="toast" class="toast"></div>
 
 <script>
-// ========== ULTIMATE ATTENDANCE SCRIPT – NO PAGE RELOADS ==========
-function getCookie(name){let v=null;if(document.cookie&&document.cookie!==''){const c=document.cookie.split(';');for(let i=0;i<c.length;i++){const cookie=c[i].trim();if(cookie.substring(0,name.length+1)===(name+'=')){v=decodeURIComponent(cookie.substring(name.length+1));break;}}}return v;}
-const csrftoken=getCookie('csrftoken');
-const schema="{{ tenant.schema_name }}";
+    const schema = "{{ tenant.schema_name }}";
+    const csrftoken = getCookie('csrftoken');
+    let pollInterval = null;
+    let activeTimers = {};
 
-document.getElementById('refreshBtn')?.addEventListener('click',()=>location.reload());
-
-// Check‑in via AJAX
-const checkinBtn = document.getElementById('checkinBtn');
-if (checkinBtn) {
-    checkinBtn.addEventListener('click', async function() {
-        const select = document.getElementById('customerSelect');
-        const customerId = select.value;
-        if (!customerId) {
-            alert('Please select a customer');
-            return;
+    function getCookie(name) {
+        let v = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    v = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
         }
-        const btn = this;
-        btn.disabled = true;
-        btn.innerText = 'Checking...';
-        const msgDiv = document.getElementById('checkinMessage');
+        return v;
+    }
+
+    function showToast(msg, isError=false) {
+        const toast = document.getElementById('toast');
+        toast.innerText = msg;
+        toast.style.backgroundColor = isError ? '#dc2626' : '#10b981';
+        toast.style.display = 'block';
+        setTimeout(() => { toast.style.display = 'none'; }, 3000);
+    }
+
+    async function fetchActiveAndHistory() {
         try {
-            const resp = await fetch('/api/gym/checkin/', {
+            const res = await fetch(`/api/gym/attendance-data/${schema}/`);
+            const data = await res.json();
+            // Update stats
+            document.getElementById('todayCheckins').innerText = data.today_stats.total;
+            document.getElementById('activeNow').innerText = data.today_stats.active;
+            document.getElementById('uniqueToday').innerText = data.today_stats.unique;
+            // Render active table
+            const activeBody = document.getElementById('activeTableBody');
+            if (data.active.length === 0) {
+                activeBody.innerHTML = '<tr><td colspan="4" class="empty-row">No active check-ins</td></tr>';
+            } else {
+                activeBody.innerHTML = '';
+                for (const a of data.active) {
+                    const row = activeBody.insertRow();
+                    row.setAttribute('data-att-id', a.id);
+                    row.setAttribute('data-customer-id', a.customer_id);
+                    row.innerHTML = `
+                        <td><strong>${escapeHtml(a.customer_name)}</strong><br><small>${escapeHtml(a.customer_phone)}</small></td>
+                        <td>${a.check_in_time}</td>
+                        <td class="timer" data-start="${a.check_in_raw}">--:--:--</td>
+                        <td><button class="checkout-btn" data-id="${a.customer_id}">Check Out</button></td>
+                    `;
+                    startTimer(row.cells[2], a.check_in_raw);
+                }
+            }
+            // Render history table
+            const historyBody = document.getElementById('historyTableBody');
+            if (data.history.length === 0) {
+                historyBody.innerHTML = '<tr><td colspan="6" class="empty-row">No checked-out records today</td></tr>';
+            } else {
+                historyBody.innerHTML = '';
+                for (const h of data.history) {
+                    const row = historyBody.insertRow();
+                    row.innerHTML = `
+                        <td><strong>${escapeHtml(h.customer_name)}</strong><br><small>${escapeHtml(h.customer_phone)}</small></td>
+                        <td>${h.check_in_time}</td>
+                        <td>${h.check_out_time || '-'}</td>
+                        <td>${h.duration || '-'}</td>
+                        <td>${escapeHtml(h.notes) || '-'}</td>
+                        <td><button class="edit-btn" data-id="${h.id}">Edit</button></td>
+                    `;
+                }
+            }
+            // Re-attach event listeners
+            attachCheckoutEvents();
+            attachEditEvents();
+        } catch(e) { console.error('Poll error', e); }
+    }
+
+    function attachCheckoutEvents() {
+        document.querySelectorAll('.checkout-btn').forEach(btn => {
+            btn.removeEventListener('click', checkoutHandler);
+            btn.addEventListener('click', checkoutHandler);
+        });
+    }
+
+    async function checkoutHandler(e) {
+        const btn = e.currentTarget;
+        const customerId = btn.dataset.id;
+        if (!confirm('Check out this customer?')) return;
+        btn.disabled = true;
+        btn.innerText = '...';
+        try {
+            const res = await fetch('/api/gym/checkout/', {
                 method: 'POST',
                 headers: { 'X-CSRFToken': csrftoken, 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: `customer_id=${customerId}`
             });
-            const data = await resp.json();
-            if (data.error) {
-                msgDiv.style.display = 'block';
-                msgDiv.innerHTML = `<strong>Error:</strong> ${data.error}`;
-                msgDiv.className = 'info-message warning';
-            } else if (data.already_checked_in) {
-                msgDiv.style.display = 'block';
-                msgDiv.innerHTML = `<strong>⚠️ ${data.customer_name} already checked in today.</strong>`;
-                msgDiv.className = 'info-message warning';
-            } else {
-                msgDiv.style.display = 'block';
-                msgDiv.innerHTML = `<strong>✅ ${data.message}</strong>`;
-                msgDiv.className = 'info-message';
-                // Remove customer from dropdown
-                const option = select.querySelector(`option[value="${customerId}"]`);
-                if (option) option.remove();
-                if (select.options.length === 1) select.value = '';
-                // Add row to active table
-                const tbody = document.getElementById('activeTableBody');
-                const emptyRow = tbody.querySelector('.empty-row');
-                if (emptyRow) emptyRow.remove();
-                const newRow = document.createElement('tr');
-                newRow.setAttribute('data-customer-id', customerId);
-                newRow.setAttribute('data-customer-name', data.customer_name.toLowerCase());
-                newRow.innerHTML = `
-                    <td><strong>${escapeHtml(data.customer_name)}</strong><br><small>${escapeHtml(data.customer_phone)}</small></td>
-                    <td>${data.check_in_time}</td>
-                    <td class="checkout-time">—</td>
-                    <td><button class="btn-checkout" data-id="${customerId}">Check-out</button></td>
-                `;
-                tbody.appendChild(newRow);
-                document.getElementById('activeCount').innerText = tbody.children.length;
-                newRow.querySelector('.btn-checkout')?.addEventListener('click', checkoutHandler);
+            const data = await res.json();
+            if (data.error) showToast(data.error, true);
+            else {
+                showToast(`✅ Checked out ${data.customer_name}`);
+                fetchActiveAndHistory(); // refresh both tables
             }
-        } catch(e) {
-            msgDiv.style.display = 'block';
-            msgDiv.innerHTML = `<strong>Error:</strong> ${e.message}`;
-            msgDiv.className = 'info-message warning';
-        } finally {
-            btn.disabled = false;
-            btn.innerText = '✔ Check In';
-            setTimeout(() => { if (msgDiv) msgDiv.style.display = 'none'; }, 3000);
-        }
-    });
-}
-
-// Checkout handler – updates UI without full page reload
-async function checkoutHandler(event) {
-    const btn = event.currentTarget;
-    const customerId = btn.dataset.id;
-    if (!confirm('Check out now?')) return;
-    btn.disabled = true;
-    btn.innerText = '...';
-    try {
-        const resp = await fetch('/api/gym/checkout/', {
-            method: 'POST',
-            headers: { 'X-CSRFToken': csrftoken, 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: `customer_id=${customerId}`
-        });
-        const data = await resp.json();
-        if (data.error) {
-            alert(data.error);
-        } else {
-            const activeRow = document.querySelector(`#activeTable tbody tr[data-customer-id="${customerId}"]`);
-            if (activeRow) {
-                const customerName = activeRow.cells[0].innerText.split('\n')[0];
-                const checkinTime = activeRow.cells[1].innerText;
-                const now = new Date();
-                const checkoutTime = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-                // Remove from active
-                activeRow.remove();
-                document.getElementById('activeCount').innerText = document.querySelectorAll('#activeTable tbody tr').length;
-                // Add to history
-                const historyTbody = document.querySelector('#historyTable tbody');
-                const historyEmpty = historyTbody.querySelector('.empty-row');
-                if (historyEmpty) historyEmpty.remove();
-                const newHistoryRow = document.createElement('tr');
-                newHistoryRow.setAttribute('data-customer-name', customerName.toLowerCase());
-                newHistoryRow.innerHTML = `
-                    <td><strong>${escapeHtml(customerName)}</strong><br><small>${data.customer_phone || ''}</small></td>
-                    <td>${checkinTime}</td>
-                    <td>${checkoutTime}</td>
-                    <td>-</td>
-                    <td><button class="edit-att-btn" data-id="${data.attendance_id}" style="background:var(--primary);">Edit</button></td>
-                `;
-                historyTbody.appendChild(newHistoryRow);
-                newHistoryRow.querySelector('.edit-att-btn')?.addEventListener('click', async function() {
-                    const attId = this.dataset.id;
-                    await openEditModal(attId);
-                });
-                alert(`✅ Checked out ${customerName}`);
-            } else {
-                console.warn("Active row not found – manual refresh may be needed");
-            }
-        }
-    } catch(e) {
-        alert('Error: ' + e.message);
-    } finally {
-        btn.disabled = false;
+        } catch(e) { showToast(e.message, true); }
+        finally { btn.disabled = false; }
     }
-}
 
-function escapeHtml(str) {
-    if (!str) return '';
-    return str.replace(/[&<>]/g, function(m) {
-        if (m === '&') return '&amp;';
-        if (m === '<') return '&lt;';
-        if (m === '>') return '&gt;';
-        return m;
-    });
-}
+    function startTimer(cell, startIso) {
+        const start = new Date(startIso);
+        function update() {
+            const now = new Date();
+            const diff = Math.floor((now - start) / 1000);
+            const hrs = Math.floor(diff / 3600);
+            const mins = Math.floor((diff % 3600) / 60);
+            const secs = diff % 60;
+            cell.innerText = `${hrs.toString().padStart(2,'0')}:${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
+        }
+        update();
+        const interval = setInterval(update, 1000);
+        // store interval to clear later if needed
+        if (cell._timer) clearInterval(cell._timer);
+        cell._timer = interval;
+    }
 
-// Attach checkout to existing buttons
-document.querySelectorAll('.btn-checkout').forEach(btn => btn.addEventListener('click', checkoutHandler));
-
-// Table search
-document.getElementById('activeSearch')?.addEventListener('keyup', function() {
-    const filter = this.value.toLowerCase();
-    document.querySelectorAll('#activeTable tbody tr').forEach(row => {
-        const name = row.getAttribute('data-customer-name') || '';
-        row.style.display = name.includes(filter) ? '' : 'none';
-    });
-});
-document.getElementById('historySearch')?.addEventListener('keyup', function() {
-    const filter = this.value.toLowerCase();
-    document.querySelectorAll('#historyTable tbody tr').forEach(row => {
-        const name = row.getAttribute('data-customer-name') || '';
-        row.style.display = name.includes(filter) ? '' : 'none';
-    });
-});
-
-// Attendance edit modal
-const attModal = document.getElementById('attEditModal');
-let currentAttId = null;
-async function openEditModal(attId) {
-    currentAttId = attId;
-    const resp = await fetch(`/portal/${schema}/gym/attendance/${currentAttId}/edit/`);
-    const data = await resp.json();
-    if (data.error) { alert(data.error); return; }
-    document.getElementById('editCheckIn').value = data.check_in.slice(0,16);
-    document.getElementById('editCheckOut').value = data.check_out ? data.check_out.slice(0,16) : '';
-    document.getElementById('editNotes').value = data.notes;
-    attModal.style.display = 'flex';
-}
-document.querySelectorAll('.edit-att-btn').forEach(btn => btn.addEventListener('click', function() {
-    openEditModal(this.dataset.id);
-}));
-attModal.querySelector('.close').onclick = () => attModal.style.display = 'none';
-document.getElementById('attEditForm').onsubmit = async (e) => {
-    e.preventDefault();
-    const formData = new FormData(e.target);
-    const btn = attModal.querySelector('button[type="submit"]');
-    btn.disabled = true;
-    try {
-        const resp = await fetch(`/portal/${schema}/gym/attendance/${currentAttId}/edit/`, {
-            method: 'POST',
-            headers: { 'X-CSRFToken': csrftoken },
-            body: formData
+    function attachEditEvents() {
+        document.querySelectorAll('.edit-btn').forEach(btn => {
+            btn.removeEventListener('click', editHandler);
+            btn.addEventListener('click', editHandler);
         });
+    }
+
+    async function editHandler(e) {
+        const attId = e.currentTarget.dataset.id;
+        const modal = document.getElementById('editModal');
+        const resp = await fetch(`/api/gym/attendance/${attId}/edit/`);
         const data = await resp.json();
-        if (data.message) alert(data.message);
-        else if (data.errors) alert('Error: ' + JSON.stringify(data.errors));
-        if (!data.error) console.warn("Page reload prevented – update via AJAX only");
-    } catch(e) { alert(e.message); }
-    finally { btn.disabled = false; attModal.style.display = 'none'; }
-};
+        if (data.error) { showToast(data.error, true); return; }
+        document.getElementById('editCheckIn').value = data.check_in.slice(0,16);
+        document.getElementById('editCheckOut').value = data.check_out ? data.check_out.slice(0,16) : '';
+        document.getElementById('editNotes').value = data.notes;
+        modal.classList.add('show');
+        modal.dataset.attId = attId;
+    }
+
+    document.getElementById('editForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const modal = document.getElementById('editModal');
+        const attId = modal.dataset.attId;
+        const formData = new FormData(e.target);
+        try {
+            const res = await fetch(`/api/gym/attendance/${attId}/edit/`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrftoken },
+                body: formData
+            });
+            const data = await res.json();
+            if (data.message) showToast(data.message);
+            else showToast('Error updating', true);
+            modal.classList.remove('show');
+            fetchActiveAndHistory();
+        } catch(e) { showToast(e.message, true); }
+    };
+
+    document.querySelector('#editModal .close').onclick = () => {
+        document.getElementById('editModal').classList.remove('show');
+    };
+
+    // Check-in via barcode or select
+    document.getElementById('checkinBtn').onclick = async () => {
+        const barcode = document.getElementById('barcodeInput').value.trim();
+        const select = document.getElementById('customerSelect');
+        let customerId = null;
+        if (barcode) {
+            // Search by barcode or phone/name
+            const searchResp = await fetch(`/api/gym/search-customer/${schema}/?q=${encodeURIComponent(barcode)}`);
+            const customers = await searchResp.json();
+            if (customers.length === 0) { showToast('No customer found', true); return; }
+            if (customers.length === 1) customerId = customers[0].id;
+            else { showToast('Multiple customers found, please select from dropdown', true); return; }
+        } else {
+            customerId = select.value;
+            if (!customerId) { showToast('Select a customer or scan barcode', true); return; }
+        }
+        const btn = document.getElementById('checkinBtn');
+        btn.disabled = true;
+        btn.innerText = 'Checking...';
+        try {
+            const res = await fetch('/api/gym/checkin/', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrftoken, 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `customer_id=${customerId}`
+            });
+            const data = await res.json();
+            if (data.error) showToast(data.error, true);
+            else {
+                showToast(`✅ ${data.customer_name} checked in`);
+                document.getElementById('barcodeInput').value = '';
+                fetchActiveAndHistory();
+                // Also reload customer dropdown options (eligibility may change)
+                loadCustomerDropdown();
+            }
+        } catch(e) { showToast(e.message, true); }
+        finally { btn.disabled = false; btn.innerText = '✔ Check In'; }
+    };
+
+    async function loadCustomerDropdown() {
+        const res = await fetch(`/api/gym/eligible-customers/${schema}/`);
+        const customers = await res.json();
+        const select = document.getElementById('customerSelect');
+        select.innerHTML = '<option value="">-- Select customer --</option>';
+        for (const c of customers) {
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            opt.innerText = `${c.name} (${c.phone})`;
+            select.appendChild(opt);
+        }
+    }
+
+    document.getElementById('refreshBtn').onclick = () => fetchActiveAndHistory();
+    document.getElementById('exportCsvBtn').onclick = () => {
+        window.location.href = `/api/gym/export-attendance/${schema}/?date=today`;
+    };
+
+    // Poll every 10 seconds
+    if (pollInterval) clearInterval(pollInterval);
+    pollInterval = setInterval(fetchActiveAndHistory, 10000);
+    fetchActiveAndHistory();
+    loadCustomerDropdown();
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
+    }
 </script>
 {% endblock %}

@@ -1,57 +1,46 @@
 #!/usr/bin/env python3
-"""
-Patcher for axis_saas/views.py – adds missing imports:
-- Count
-- TruncMonth, TruncDay
-- defaultdict
-"""
-
 import re
 import os
-import sys
 
-def patch_views():
-    views_path = os.path.join('axis_saas', 'views.py')
-    if not os.path.exists(views_path):
-        print(f"❌ {views_path} not found. Make sure you run this script from the project root (where manage.py is).")
-        sys.exit(1)
+PUBLIC_URLS_PATH = "axis_saas/public_urls.py"
+VIEWS_PATH = "axis_saas/views.py"
 
-    with open(views_path, 'r', encoding='utf-8') as f:
+def fix_public_urls():
+    if not os.path.exists(PUBLIC_URLS_PATH):
+        print(f"❌ {PUBLIC_URLS_PATH} not found")
+        return
+
+    with open(PUBLIC_URLS_PATH, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # List of imports to add (if not present)
-    imports_to_add = [
-        ('from django.db.models import Count', 'from django.db.models import Sum, Q'),
-        ('from django.db.models.functions import TruncMonth, TruncDay', 'from django.db.models import Sum, Q'),
-        ('from collections import defaultdict', 'from datetime import date, timedelta'),
-    ]
-
-    modified = False
-
-    for new_import, after_line in imports_to_add:
-        if new_import in content:
-            print(f"✓ Already present: {new_import}")
-            continue
-
-        # Find the line where we want to insert
-        # Use regex to find the after_line (exact match)
-        pattern = re.compile(r'^' + re.escape(after_line) + r'$', re.MULTILINE)
-        match = pattern.search(content)
-        if match:
-            insert_pos = match.end()
-            # Insert new import after that line
-            content = content[:insert_pos] + '\n' + new_import + content[insert_pos:]
-            print(f"✅ Added: {new_import}")
-            modified = True
-        else:
-            print(f"⚠️ Could not find anchor line: {after_line} – skipping {new_import}")
-
-    if modified:
-        with open(views_path, 'w', encoding='utf-8') as f:
+    # Add missing API names to the import line
+    # The existing import line is very long; we'll insert the new names after an existing one.
+    # We'll look for "gym_subscription_status_api" and add the new ones after it.
+    new_imports = "gym_attendance_data_api, gym_eligible_customers_api, gym_search_customer_api, gym_export_attendance_api"
+    if new_imports not in content:
+        # Find the line that contains "gym_subscription_status_api"
+        pattern = r'(from \.views import .*?gym_subscription_status_api)'
+        replacement = r'\1, ' + new_imports
+        content = re.sub(pattern, replacement, content, count=1)
+        with open(PUBLIC_URLS_PATH, "w", encoding="utf-8") as f:
             f.write(content)
-        print("\n🎉 views.py successfully patched! Restart your Django development server now.")
+        print("✅ Updated import statement in public_urls.py")
     else:
-        print("\n✨ No changes needed – all imports are already in place.")
+        print("ℹ️ Imports already present")
 
-if __name__ == '__main__':
-    patch_views()
+def fix_views_duplicates():
+    if not os.path.exists(VIEWS_PATH):
+        print(f"❌ {VIEWS_PATH} not found")
+        return
+    with open(VIEWS_PATH, "r", encoding="utf-8") as f:
+        content = f.read()
+    # Remove duplicate @csrf_exempt decorators
+    content = re.sub(r"(@csrf_exempt\s*){2,}", "@csrf_exempt\n", content)
+    with open(VIEWS_PATH, "w", encoding="utf-8") as f:
+        f.write(content)
+    print("✅ Cleaned duplicate decorators in views.py")
+
+if __name__ == "__main__":
+    fix_public_urls()
+    fix_views_duplicates()
+    print("\n🎉 Done. Restart the server: python3 manage.py runserver")
