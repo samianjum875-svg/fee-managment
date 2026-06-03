@@ -1,87 +1,71 @@
 #!/usr/bin/env python3
 """
-Patcher for gym attendance time display:
-- Converts UTC datetime fields to local timezone (Asia/Karachi) before formatting.
-- Affects gym_attendance_data_api, gym_checkin_api, gym_edit_attendance (GET).
+Fix gym tenant login redirect - changes school_login to redirect to appropriate dashboard.
 """
 
 import re
 import os
 
-VIEWS_FILE = "axis_saas/views.py"
+PUBLIC_URLS = "axis_saas/public_urls.py"
 
-def patch_attendance_time_display():
-    with open(VIEWS_FILE, "r") as f:
+def fix_login_redirect():
+    with open(PUBLIC_URLS, "r") as f:
         content = f.read()
 
-    # Helper function to format local time
-    # We'll add a small helper at the top of the file if not present
-    if "def local_time_str(dt):" not in content:
-        local_time_func = """
-def local_time_str(dt):
-    \"\"\"Convert aware datetime to local timezone and return formatted time string.\"\"\"
-    if not dt:
-        return ''
-    from django.utils import timezone
-    local = timezone.localtime(dt)
-    return local.strftime('%H:%M')
-"""
-        # Insert after the imports section (after the last import)
-        # Find a suitable place: after the last 'from ... import ...' line
-        lines = content.split('\n')
-        insert_idx = 0
-        for i, line in enumerate(lines):
-            if line.startswith('from ') or line.startswith('import '):
-                insert_idx = i + 1
-        lines.insert(insert_idx, local_time_func)
-        content = '\n'.join(lines)
-        print("✅ Added local_time_str helper function.")
-    else:
-        print("local_time_str already exists.")
+    # Check if the redirect is still hardcoded to 'dashboard'
+    if "return redirect('dashboard', schema_name=tenant.schema_name)" not in content:
+        print("Login redirect may already be fixed. Checking...")
+        if "if tenant.tenant_type == 'gym'" in content:
+            print("✅ Fix already applied.")
+            return False
 
-    # Patch gym_attendance_data_api
-    # Find the section where check_in_time and check_out_time are set
-    # In gym_attendance_data_api, we have:
-    # 'check_in_time': a.check_in.strftime('%H:%M'),
-    # 'check_out_time': a.check_out.strftime('%H:%M'),
-    pattern = r"(check_in_time': a\.check_in\.strftime\('%H:%M'\))"
-    replacement = r"check_in_time': local_time_str(a.check_in)"
-    content = re.sub(pattern, replacement, content)
+    # We need to replace the entire school_login function
+    # Find the function and replace it with the fixed version
+    function_pattern = r'def school_login\(request, schema_name\):.*?(?=\n\ndef |\n\Z)'
+    
+    match = re.search(function_pattern, content, re.DOTALL)
+    if not match:
+        print("Could not find school_login function")
+        return False
 
-    pattern = r"(check_out_time': a\.check_out\.strftime\('%H:%M'\))"
-    replacement = r"check_out_time': local_time_str(a.check_out)"
-    content = re.sub(pattern, replacement, content)
+    new_function = '''def school_login(request, schema_name):
+    # Ensure tenant exists
+    tenant = ensure_schoolclient(schema_name)
+    if tenant is None:
+        raise Http404(f"Tenant schema '{schema_name}' does not exist.")
 
-    # Also in active list: 'check_in_time': a.check_in.strftime('%H:%M'),
-    pattern = r"('check_in_time': a\.check_in\.strftime\('%H:%M'\)[,\n])"
-    replacement = r"'check_in_time': local_time_str(a.check_in),"
-    content = re.sub(pattern, replacement, content)
+    if request.method == 'POST':
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+        if username == tenant.admin_username and password == tenant.admin_password:
+            request.session['school_admin_authenticated'] = True
+            request.session['school_admin_schema'] = tenant.schema_name
+            request.session['school_admin_username'] = username
+            # Redirect to appropriate dashboard based on tenant_type
+            if tenant.tenant_type == 'gym':
+                return redirect('gym_dashboard', schema_name=tenant.schema_name)
+            else:
+                return redirect('dashboard', schema_name=tenant.schema_name)
+        return render(request, 'tenant/login.html', {'tenant': tenant, 'error': 'Invalid credentials'})
+    return render(request, 'tenant/login.html', {'tenant': tenant})'''
 
-    # Patch gym_checkin_api
-    # In gym_checkin_api, we have: 'check_in_time': attendance.check_in.strftime('%H:%M'),
-    pattern = r"('check_in_time': attendance\.check_in\.strftime\('%H:%M'\))"
-    replacement = r"'check_in_time': local_time_str(attendance.check_in)"
-    content = re.sub(pattern, replacement, content)
-
-    # Patch gym_edit_attendance GET response (sends ISO strings; keep as is because JS Date handles UTC)
-    # No change needed, but ensure that check_in/check_out are sent as ISO strings (they already are).
-
-    # Also patch the history duration calculation: if duration_minutes is stored, it's fine.
-
-    # Write back
-    with open(VIEWS_FILE, "w") as f:
-        f.write(content)
-    print("✅ Patched time display to use local timezone.")
+    new_content = content.replace(match.group(0), new_function)
+    
+    with open(PUBLIC_URLS, "w") as f:
+        f.write(new_content)
+    
+    print("✅ Fixed login redirect: gym tenants now go to gym_dashboard")
     return True
 
 def main():
-    if not os.path.exists(VIEWS_FILE):
-        print(f"Error: {VIEWS_FILE} not found. Run script from project root.")
+    if not os.path.exists(PUBLIC_URLS):
+        print(f"Error: {PUBLIC_URLS} not found")
         return
 
-    patch_attendance_time_display()
-    print("\n🎉 Timezone fix applied! Restart Django server.")
-    print("Now check-in/out times will display correctly in local time (Asia/Karachi).")
+    fix_login_redirect()
+    print("\n🎉 Fix applied! Restart your Django server:")
+    print("   python3 manage.py runserver")
+    print("Then try logging into the gym tenant again.")
 
 if __name__ == "__main__":
     main()
