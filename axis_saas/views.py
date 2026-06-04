@@ -1255,8 +1255,8 @@ def gym_customer_profile(request, schema_name, customer_id):
         for a in attendances:
             a.can_edit = a.is_editable()
 
-        total_fee = subscriptions.aggregate(models.Sum('amount'))['amount__sum'] or 0
-        total_paid = payments.aggregate(models.Sum('amount'))['amount__sum'] or 0
+        total_fee = subscriptions.aggregate(Sum('amount'))['amount__sum'] or 0
+        total_paid = payments.aggregate(Sum('amount'))['amount__sum'] or 0
         pending_total = total_fee - total_paid
 
         context = {

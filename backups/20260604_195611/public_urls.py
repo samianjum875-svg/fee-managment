@@ -74,7 +74,6 @@ def school_login(request, schema_name):
             request.session['school_admin_authenticated'] = True
             request.session['school_admin_schema'] = tenant.schema_name
             request.session['school_admin_username'] = username
-            request.session.save()   # Force session save immediately
             # Redirect to appropriate dashboard based on tenant_type
             if tenant.tenant_type == 'gym':
                 return redirect('gym_dashboard', schema_name=tenant.schema_name)

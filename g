@@ -1,4 +1,65 @@
-{% extends 'tenant/base.html' %}
+#!/usr/bin/env python3
+"""
+Fix gym customer form:
+- Remove photo field
+- Improve form layout (grid, better styling)
+"""
+
+import re
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).parent.absolute()
+
+def backup_file(filepath):
+    """Create a backup of the file before modifying."""
+    import shutil
+    backup_dir = PROJECT_ROOT / "backups_gym_form"
+    backup_dir.mkdir(exist_ok=True)
+    backup_path = backup_dir / filepath.name
+    shutil.copy2(filepath, backup_path)
+    print(f"📁 Backed up: {filepath} -> {backup_path}")
+
+def fix_forms():
+    """Remove 'photo' from GymCustomerForm fields."""
+    forms_path = PROJECT_ROOT / "axis_saas" / "forms.py"
+    if not forms_path.exists():
+        print("❌ forms.py not found")
+        return False
+
+    with open(forms_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    # Find the GymCustomerForm class and remove 'photo' from fields list
+    # We look for the fields definition: fields = ['name', 'phone', ..., 'photo']
+    pattern = r"(fields\s*=\s*\[)([^\]]*)(\])"
+    def replacer(match):
+        fields_str = match.group(2)
+        # Split by commas, strip, remove 'photo'
+        fields = [f.strip().strip("'\"") for f in fields_str.split(",")]
+        if "photo" in fields:
+            fields.remove("photo")
+        new_fields_str = ", ".join([f"'{f}'" for f in fields])
+        return f"{match.group(1)}{new_fields_str}{match.group(3)}"
+
+    new_content = re.sub(pattern, replacer, content, flags=re.DOTALL)
+    if new_content == content:
+        print("⚠️ No changes made to forms.py (photo field already removed or not found)")
+        return False
+
+    backup_file(forms_path)
+    with open(forms_path, "w", encoding="utf-8") as f:
+        f.write(new_content)
+    print("✅ Removed 'photo' field from GymCustomerForm")
+    return True
+
+def fix_template():
+    """Replace gym_customer_form.html with a better layout."""
+    template_path = PROJECT_ROOT / "templates" / "tenant" / "gym_customer_form.html"
+    if not template_path.exists():
+        print("❌ gym_customer_form.html not found")
+        return False
+
+    new_template = """{% extends 'tenant/base.html' %}
 {% block title %}{% if customer %}Edit{% else %}Add{% endif %} Customer | {{ tenant.name }}{% endblock %}
 {% block body %}
 <div class="page-header">
@@ -136,3 +197,18 @@
     }
 </style>
 {% endblock %}
+"""
+    backup_file(template_path)
+    with open(template_path, "w", encoding="utf-8") as f:
+        f.write(new_template)
+    print("✅ Replaced gym_customer_form.html with improved layout")
+    return True
+
+def main():
+    print("🔧 Fixing gym customer form (remove photo, improve UI)")
+    fix_forms()
+    fix_template()
+    print("\n✨ Done! Restart your server. The photo field is removed, and the form has a clean grid layout.")
+
+if __name__ == "__main__":
+    main()

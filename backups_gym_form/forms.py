@@ -5,7 +5,8 @@ from .models import Student, FeeStructure, PaymentTransaction, SchoolFeeSettings
 class StudentForm(forms.ModelForm):
     class Meta:
         model = Student
-        fields = ['name', 'father_name', 'father_cnic', 'parent_mobile', 'grade', 'section', 'admission_date', 'status', 'gender', 'date_of_birth', 'address', 'notes', 'custom_fee']
+        fields = ['name', 'father_name', 'father_cnic', 'parent_mobile', 'grade', 'section',
+                  'admission_date', 'status', 'gender', 'date_of_birth', 'address', 'notes', 'custom_fee']
         widgets = {
             'admission_date': forms.DateInput(attrs={'type': 'date'}),
             'date_of_birth': forms.DateInput(attrs={'type': 'date'}),
@@ -49,7 +50,8 @@ class GymCustomerForm(forms.ModelForm):
     class Meta:
         from .models import GymCustomer
         model = GymCustomer
-        fields = ['name', 'phone', 'email', 'address', 'gender', 'date_of_birth', 'membership_start', 'membership_end', 'monthly_fee', 'status', 'notes']
+        fields = ['name', 'phone', 'email', 'address', 'gender', 'date_of_birth',
+                  'membership_start', 'membership_end', 'monthly_fee', 'status', 'notes', 'photo']
         widgets = {
             'date_of_birth': forms.DateInput(attrs={'type': 'date'}),
             'membership_start': forms.DateInput(attrs={'type': 'date'}),
