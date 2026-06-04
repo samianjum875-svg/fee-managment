@@ -190,7 +190,7 @@ urlpatterns = [
     path('portal/<slug:schema_name>/gym/receipt/<int:receipt_id>/', gym_receipt, name='gym_receipt'),
 
     # Gym routes
-    path('portal/<slug:schema_name>/gym/', gym_dashboard_view, name='gym_dashboard'),
+    path('portal/<slug:schema_name>/gym-dashboard/', gym_dashboard_view, name='gym_dashboard'),
     path('portal/<slug:schema_name>/gym/customers/', gym_customer_list_view, name='gym_customer_list'),
     path('portal/<slug:schema_name>/gym/customers/add/', gym_customer_add_view, name='gym_customer_add'),
     path('portal/<slug:schema_name>/gym/customers/edit/<int:customer_id>/', gym_customer_edit_view, name='gym_customer_edit'),

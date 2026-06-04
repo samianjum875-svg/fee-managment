@@ -20,7 +20,11 @@ from django.views.decorators.http import require_http_methods
 def require_tenant_type(allowed_types):
     def decorator(view_func):
         def wrapper(request, schema_name, *args, **kwargs):
-            tenant = get_tenant(request, schema_name)
+            # Use request.tenant if already set (by portal_wrapper)
+            if hasattr(request, 'tenant') and request.tenant is not None:
+                tenant = request.tenant
+            else:
+                tenant = get_tenant(request, schema_name)
             if tenant.tenant_type not in allowed_types:
                 raise Http404("Not available for this tenant type")
             return view_func(request, schema_name, *args, **kwargs)
@@ -41,7 +45,9 @@ def local_time_str(dt):
 
 
 def get_tenant(request, schema_name):
-    return get_object_or_404(SchoolClient, schema_name=schema_name)
+    from django_tenants.utils import schema_context
+    with schema_context('public'):
+        return get_object_or_404(SchoolClient, schema_name=schema_name)
 
 # ------------------- Dashboard -------------------
 @require_tenant_type(['school'])
