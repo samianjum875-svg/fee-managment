@@ -924,6 +924,7 @@ def student_current_fee_status_api(request, schema_name, student_id):
             }
         return JsonResponse(data)
 
+@require_tenant_type(['gym'])
 def gym_generate_subscription(request, schema_name, customer_id):
     """Generate a new subscription for a gym customer (multi-month)."""
     from django.http import JsonResponse
@@ -960,7 +961,6 @@ def gym_generate_subscription(request, schema_name, customer_id):
         due_offset = settings.due_date_offset
 
         created = []
-
         for i in range(months):
             target_month = today.month + i
             target_year = today.year
@@ -968,38 +968,25 @@ def gym_generate_subscription(request, schema_name, customer_id):
                 target_month -= 12
                 target_year += 1
 
-            # ✅ Compute due_date for this target month BEFORE checking existence
+            # Check if subscription already exists for that month
+            if GymSubscription.objects.filter(customer=customer, month=target_month, year=target_year).exists():
+                continue
+
+            # Due date: membership start day or fallback to generation day
             due_day = customer.membership_start.day if customer.membership_start else 1
             max_day = monthrange(target_year, target_month)[1]
             due_day = min(due_day, max_day)
             due_date = date(target_year, target_month, due_day) + timedelta(days=due_offset)
 
-            existing = GymSubscription.objects.filter(customer=customer, month=target_month, year=target_year).first()
-            if existing:
-                if existing.is_cancelled:
-                    # Reactivate cancelled subscription with new parameters
-                    existing.amount = monthly_fee
-                    existing.paid_amount = Decimal('0')
-                    existing.due_date = due_date          # ✅ now due_date is defined
-                    existing.status = 'pending'
-                    existing.is_cancelled = False
-                    existing.cancelled_on = None
-                    existing.save()
-                    created.append(existing)
-                else:
-                    # Already have a valid subscription for this month
-                    continue
-            else:
-                # No subscription → create new one
-                sub = GymSubscription.objects.create(
-                    customer=customer,
-                    month=target_month,
-                    year=target_year,
-                    amount=monthly_fee,
-                    due_date=due_date,
-                    status='pending'
-                )
-                created.append(sub)
+            sub = GymSubscription.objects.create(
+                customer=customer,
+                month=target_month,
+                year=target_year,
+                amount=monthly_fee,
+                due_date=due_date,
+                status='pending'
+            )
+            created.append(sub)
 
         if created:
             return JsonResponse({'message': f'Generated {len(created)} subscription(s).'})
@@ -1043,7 +1030,7 @@ def gym_cancel_subscription(request, schema_name, subscription_id):
             daily_rate = sub.amount / Decimal(days_in_month)
             remaining_days = days_in_month - days_used
             refund = daily_rate * Decimal(remaining_days)
-        sub.status = 'cancelled'
+
         sub.is_cancelled = True
         sub.cancelled_on = today
         sub.save()
@@ -1055,44 +1042,6 @@ def gym_cancel_subscription(request, schema_name, subscription_id):
         })
 
 @require_tenant_type(['gym'])
-
-@require_tenant_type(['gym'])
-def gym_update_subscription(request, schema_name, subscription_id):
-    """Update amount of an existing unpaid subscription."""
-    from django.http import JsonResponse
-    from django_tenants.utils import schema_context
-    from .models import GymSubscription
-    import json
-    from decimal import Decimal
-
-    with schema_context(schema_name):
-        try:
-            sub = GymSubscription.objects.get(id=subscription_id)
-        except GymSubscription.DoesNotExist:
-            return JsonResponse({'error': 'Subscription not found'}, status=404)
-
-        if sub.paid_amount > 0:
-            return JsonResponse({'error': 'Cannot edit a subscription that already has payments'}, status=400)
-        if sub.is_cancelled:
-            return JsonResponse({'error': 'Cancelled subscriptions cannot be edited'}, status=400)
-
-        if request.method != 'POST':
-            return JsonResponse({'error': 'Only POST allowed'}, status=405)
-
-        try:
-            data = json.loads(request.body)
-            new_amount = Decimal(str(data.get('amount')))
-            if new_amount <= 0:
-                raise ValueError
-        except (ValueError, TypeError, json.JSONDecodeError):
-            return JsonResponse({'error': 'Invalid amount'}, status=400)
-
-        sub.amount = new_amount
-        sub.save()
-        return JsonResponse({'message': f'Subscription amount updated to ₹{new_amount}'})
-
-
-
 def gym_edit_attendance(request, schema_name, attendance_id):
     """Edit an existing attendance record (within 7 hours of check-in)."""
     from django.http import JsonResponse

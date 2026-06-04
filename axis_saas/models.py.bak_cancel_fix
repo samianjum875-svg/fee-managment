@@ -220,7 +220,6 @@ class GymSubscription(models.Model):
         ('partial', 'Partially Paid'),
         ('paid', 'Paid'),
         ('overdue', 'Overdue'),
-        ('cancelled', 'Cancelled'),
     ]
     customer = models.ForeignKey(GymCustomer, on_delete=models.CASCADE, related_name='subscriptions')
     month = models.PositiveSmallIntegerField()

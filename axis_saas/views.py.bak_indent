@@ -924,6 +924,7 @@ def student_current_fee_status_api(request, schema_name, student_id):
             }
         return JsonResponse(data)
 
+@require_tenant_type(['gym'])
 def gym_generate_subscription(request, schema_name, customer_id):
     """Generate a new subscription for a gym customer (multi-month)."""
     from django.http import JsonResponse
@@ -960,7 +961,6 @@ def gym_generate_subscription(request, schema_name, customer_id):
         due_offset = settings.due_date_offset
 
         created = []
-
         for i in range(months):
             target_month = today.month + i
             target_year = today.year
@@ -968,19 +968,15 @@ def gym_generate_subscription(request, schema_name, customer_id):
                 target_month -= 12
                 target_year += 1
 
-            # ✅ Compute due_date for this target month BEFORE checking existence
-            due_day = customer.membership_start.day if customer.membership_start else 1
-            max_day = monthrange(target_year, target_month)[1]
-            due_day = min(due_day, max_day)
-            due_date = date(target_year, target_month, due_day) + timedelta(days=due_offset)
-
+            
+            # Check if a non-cancelled subscription already exists
             existing = GymSubscription.objects.filter(customer=customer, month=target_month, year=target_year).first()
             if existing:
                 if existing.is_cancelled:
                     # Reactivate cancelled subscription with new parameters
                     existing.amount = monthly_fee
                     existing.paid_amount = Decimal('0')
-                    existing.due_date = due_date          # ✅ now due_date is defined
+                    existing.due_date = due_date
                     existing.status = 'pending'
                     existing.is_cancelled = False
                     existing.cancelled_on = None
@@ -990,16 +986,23 @@ def gym_generate_subscription(request, schema_name, customer_id):
                     # Already have a valid subscription for this month
                     continue
             else:
-                # No subscription → create new one
-                sub = GymSubscription.objects.create(
-                    customer=customer,
-                    month=target_month,
-                    year=target_year,
-                    amount=monthly_fee,
-                    due_date=due_date,
-                    status='pending'
-                )
-                created.append(sub)
+
+
+            # Due date: membership start day or fallback to generation day
+            due_day = customer.membership_start.day if customer.membership_start else 1
+            max_day = monthrange(target_year, target_month)[1]
+            due_day = min(due_day, max_day)
+            due_date = date(target_year, target_month, due_day) + timedelta(days=due_offset)
+
+            sub = GymSubscription.objects.create(
+                customer=customer,
+                month=target_month,
+                year=target_year,
+                amount=monthly_fee,
+                due_date=due_date,
+                status='pending'
+            )
+            created.append(sub)
 
         if created:
             return JsonResponse({'message': f'Generated {len(created)} subscription(s).'})

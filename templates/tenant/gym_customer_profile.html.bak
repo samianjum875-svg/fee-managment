@@ -2,9 +2,6 @@
 {% block title %}{{ customer.name }} Profile{% endblock %}
 {% block extra_head %}
 <style>
-    .status-cancelled { background: #9ca3af; color: #1f2937; }
-    [data-theme="dark"] .status-cancelled { background: #4b5563; color: #e5e7eb; }
-
     /* Modern profile styles */
     .profile-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem; }
     .page-title { font-size: 1.8rem; font-weight: 700; background: linear-gradient(135deg, var(--primary), var(--primary-dark)); -webkit-background-clip: text; background-clip: text; color: transparent; }
@@ -78,7 +75,7 @@
                     <td>₹{{ s.paid_amount }}</td>
                     <td><span class="status-badge status-{% if s.is_cancelled %}cancelled{% else %}{{ s.status }}{% endif %}">{{ s.get_status_display }}{% if s.is_cancelled %} (Cancelled){% endif %}</span></td>
                     <td>
-                        {% if s.is_cancelled %}<button class="regenerate-sub-btn btn-edit" data-id="{{ s.id }}" data-amount="{{ s.amount }}">Regenerate</button>{% elif not s.is_cancelled and s.paid_amount == 0 %}
+                        {% if not s.is_cancelled and s.status != 'paid' %}
                             <button class="edit-sub-btn btn-edit" data-id="{{ s.id }}" data-amount="{{ s.amount }}">Edit Amount</button>
                         {% else %}
                             —
@@ -319,43 +316,6 @@ document.getElementById('attEditForm').onsubmit = async (e) => {
     } catch(e) { alert('Error: ' + e.message); }
     finally { btn.disabled = false; attModal.classList.remove('show'); }
 };
-
-
-// Regenerate cancelled subscriptions
-document.querySelectorAll('.regenerate-sub-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
-        const subId = btn.dataset.id;
-        // We need customer_id; we can get from page context
-        if (!confirm('Regenerate this subscription? It will reset the amount and remove any existing payment records.')) return;
-        // The generation endpoint uses customer_id, not subscription_id.
-        // We'll just trigger the generation for the customer; the backend will reactivate the cancelled subscription.
-        const customerId = {{ customer.id }};
-        const months = 1; // Regenerate only current month? We'll ask.
-        let monthsGen = prompt('Enter number of months (1-12):', '1');
-        if (!monthsGen) return;
-        monthsGen = parseInt(monthsGen);
-        if (isNaN(monthsGen) || monthsGen < 1 || monthsGen > 12) return alert('Invalid months');
-        const fee = btn.dataset.amount;
-        const btnEl = btn;
-        btnEl.disabled = true;
-        btnEl.innerText = 'Regenerating...';
-        try {
-            const resp = await fetch(`/portal/${schema}/gym/customers/${customerId}/generate-subscription/`, {
-                method: 'POST',
-                headers: { 'X-CSRFToken': csrftoken, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ months: monthsGen, fee: parseFloat(fee) })
-            });
-            const data = await resp.json();
-            if (data.error) alert(data.error);
-            else {
-                alert(data.message);
-                location.reload();
-            }
-        } catch(e) { alert('Error: ' + e.message); }
-        finally { btnEl.disabled = false; btnEl.innerText = 'Regenerate'; }
-    });
-});
-
 
 // Filter subscriptions by status
 document.getElementById('subFilter')?.addEventListener('keyup', function() {

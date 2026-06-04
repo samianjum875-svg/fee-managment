@@ -968,19 +968,14 @@ def gym_generate_subscription(request, schema_name, customer_id):
                 target_month -= 12
                 target_year += 1
 
-            # ✅ Compute due_date for this target month BEFORE checking existence
-            due_day = customer.membership_start.day if customer.membership_start else 1
-            max_day = monthrange(target_year, target_month)[1]
-            due_day = min(due_day, max_day)
-            due_date = date(target_year, target_month, due_day) + timedelta(days=due_offset)
-
+            # Check if a subscription already exists for that month
             existing = GymSubscription.objects.filter(customer=customer, month=target_month, year=target_year).first()
             if existing:
                 if existing.is_cancelled:
                     # Reactivate cancelled subscription with new parameters
                     existing.amount = monthly_fee
                     existing.paid_amount = Decimal('0')
-                    existing.due_date = due_date          # ✅ now due_date is defined
+                    existing.due_date = due_date
                     existing.status = 'pending'
                     existing.is_cancelled = False
                     existing.cancelled_on = None
@@ -991,6 +986,11 @@ def gym_generate_subscription(request, schema_name, customer_id):
                     continue
             else:
                 # No subscription → create new one
+                due_day = customer.membership_start.day if customer.membership_start else 1
+                max_day = monthrange(target_year, target_month)[1]
+                due_day = min(due_day, max_day)
+                due_date = date(target_year, target_month, due_day) + timedelta(days=due_offset)
+
                 sub = GymSubscription.objects.create(
                     customer=customer,
                     month=target_month,

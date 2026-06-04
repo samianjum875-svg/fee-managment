@@ -1,0 +1,239 @@
+{% extends 'tenant/base.html' %}
+{% block title %}{{ customer.name }} Profile{% endblock %}
+{% block body %}
+<div class="profile-header">
+    <div><h1 class="page-title">{{ customer.name }}</h1><p class="page-desc">{{ customer.phone }} • {{ customer.email|default:"No email" }}</p></div>
+    <div class="header-actions">
+        <a href="{% url 'gym_customer_edit' schema_name=tenant.schema_name customer_id=customer.id %}" class="btn-secondary">✏️ Edit</a>
+        <button id="generateSubscriptionBtn" class="btn-primary">📅 Generate Subscription</button>
+        <a href="{% url 'gym_payment' schema_name=tenant.schema_name customer_id=customer.id %}" class="btn-primary">💰 Collect Payment</a>
+        <a href="{% url 'gym_customer_list' schema_name=tenant.schema_name %}" class="btn-secondary">← Back</a>
+    </div>
+</div>
+
+<div class="info-grid">
+    <div class="info-card"><div class="info-label">Membership</div><div class="info-value">{{ customer.membership_start|date:"Y-m-d" }} → {{ customer.membership_end|date:"Y-m-d"|default:"Ongoing" }}</div></div>
+    <div class="info-card"><div class="info-label">Monthly Fee</div><div class="info-value">₹{{ customer.monthly_fee }}</div></div>
+    <div class="info-card"><div class="info-label">Status</div><div class="info-value"><span class="status-badge status-{{ customer.status }}">{{ customer.get_status_display }}</span></div></div>
+</div>
+
+<div class="fee-summary">
+    <div class="summary-card"><div class="summary-label">Total Billed</div><div class="summary-value">₹{{ total_fee|floatformat:2 }}</div></div>
+    <div class="summary-card"><div class="summary-label">Total Paid</div><div class="summary-value">₹{{ total_paid|floatformat:2 }}</div></div>
+    <div class="summary-card"><div class="summary-label">Pending</div><div class="summary-value pending">₹{{ pending_total|floatformat:2 }}</div></div>
+</div>
+
+<div class="table-card">
+    <h3>Subscription History</h3>
+    <div class="table-responsive">
+        <table class="data-table" id="subscriptionsTable">
+            <thead><tr><th>Month/Year</th><th>Amount</th><th>Paid</th><th>Status</th><th>Action</th><th>Receipts</th></tr></thead>
+            <tbody>
+                {% for s in subscriptions %}
+                <tr>
+                    <td>{{ s.month }}/{{ s.year }}</td>
+                    <td>₹{{ s.amount }}</td>
+                    <td>₹{{ s.paid_amount }}</td>
+                    <td>{{ s.get_status_display }}{% if s.is_cancelled %} (Cancelled){% endif %}</td>
+                    <td>{% if not s.is_cancelled and s.status != 'paid' %}<button class="cancel-sub-btn" data-id="{{ s.id }}">Cancel</button>{% endif %}</td>
+                    <td>{% for p in s.payments.all %}<a href="{% url 'gym_receipt' schema_name=tenant.schema_name receipt_id=p.id %}">{{ p.receipt_number }}</a> {% endfor %}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="6">No subscriptions</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="table-card">
+    <h3>Payment History</h3>
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead><tr><th>Receipt</th><th>Amount</th><th>Date</th><th>Mode</th></tr></thead>
+            <tbody>
+                {% for p in payments %}
+                <tr><td><a href="{% url 'gym_receipt' schema_name=tenant.schema_name receipt_id=p.id %}">{{ p.receipt_number }}</a></td><td>₹{{ p.amount }}</td><td>{{ p.payment_date|date:"Y-m-d" }}</td><td>{{ p.get_payment_mode_display }}</td></tr>
+                {% empty %}
+                <tr><td colspan="4">No payments</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="table-card">
+    <h3>Attendance History</h3>
+    <div class="table-responsive">
+        <table class="data-table" id="attendanceTable">
+            <thead><tr><th>Date</th><th>Check In</th><th>Check Out</th><th>Notes</th><th>Actions</th></tr></thead>
+            <tbody>
+                {% for a in attendances %}
+                <tr data-att-id="{{ a.id }}">
+                    <td>{{ a.date|date:"Y-m-d" }}</td>
+                    <td>{{ a.check_in|date:"Y-m-d H:i" }}</td>
+                    <td>{{ a.check_out|date:"Y-m-d H:i"|default:"-" }}</td>
+                    <td>{{ a.notes|default:"-" }}</td>
+                    <td>{% if a.can_edit %}<button class="edit-att-btn" data-id="{{ a.id }}">Edit</button>{% else %}Locked{% endif %}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5">No attendance records</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Subscription Generation Modal -->
+<div id="subModal" class="modal" style="display:none;">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h3>Generate Subscription</h3>
+        <form id="subForm">
+            {% csrf_token %}
+            <label>Months (1-3):</label>
+            <select name="months" id="monthsSelect">
+                <option value="1">1 Month</option>
+                <option value="2">2 Months</option>
+                <option value="3">3 Months</option>
+            </select>
+            <label>Monthly Fee (₹):</label>
+            <input type="number" step="0.01" name="fee" id="feeInput" value="{{ customer.monthly_fee }}" required>
+            <button type="submit" id="confirmGenBtn">Generate</button>
+        </form>
+    </div>
+</div>
+
+<!-- Attendance Edit Modal -->
+<div id="attEditModal" class="modal" style="display:none;">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h3>Edit Attendance</h3>
+        <form id="attEditForm">
+            {% csrf_token %}
+            <label>Check In:</label>
+            <input type="datetime-local" name="check_in" id="editCheckIn" required>
+            <label>Check Out:</label>
+            <input type="datetime-local" name="check_out" id="editCheckOut">
+            <label>Notes:</label>
+            <textarea name="notes" id="editNotes" rows="2"></textarea>
+            <button type="submit">Save Changes</button>
+        </form>
+    </div>
+</div>
+
+<style>
+.modal { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:1000; }
+.modal-content { background: var(--surface); border-radius: var(--radius); padding: 1.5rem; min-width: 300px; box-shadow: var(--shadow); }
+.modal-content .close { float:right; cursor:pointer; font-size:1.5rem; }
+.modal-content form { display:flex; flex-direction:column; gap:1rem; margin-top:1rem; }
+.modal-content label { font-weight:600; }
+.modal-content input, .modal-content select, .modal-content textarea { padding:0.5rem; border-radius:0.5rem; border:1px solid var(--border); background: var(--surface-alt); }
+.btn-primary, .btn-secondary, button { background: var(--primary); color:white; border:none; border-radius:2rem; padding:0.3rem 1rem; cursor:pointer; }
+.cancel-sub-btn { background: var(--danger); }
+.edit-att-btn { background: var(--primary); }
+</style>
+
+<script>
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+const csrftoken = getCookie('csrftoken');
+const schema = "{{ tenant.schema_name }}";
+const customerId = {{ customer.id }};
+
+// Generation modal
+const modal = document.getElementById('subModal');
+const genBtn = document.getElementById('generateSubscriptionBtn');
+const span = modal.querySelector('.close');
+genBtn.onclick = () => modal.style.display = 'flex';
+span.onclick = () => modal.style.display = 'none';
+window.onclick = (e) => { if (e.target == modal) modal.style.display = 'none'; };
+
+document.getElementById('subForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const months = document.getElementById('monthsSelect').value;
+    const fee = document.getElementById('feeInput').value;
+    const btn = document.getElementById('confirmGenBtn');
+    btn.disabled = true;
+    btn.innerText = 'Generating...';
+    try {
+        const resp = await fetch(`/portal/${schema}/gym/customers/${customerId}/generate-subscription/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrftoken, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ months: parseInt(months), fee: fee })
+        });
+        const data = await resp.json();
+        alert(data.message || data.error);
+        if (!data.error) location.reload();
+    } catch(e) { alert('Error: ' + e.message); }
+    finally { btn.disabled = false; btn.innerText = 'Generate'; modal.style.display = 'none'; }
+};
+
+// Cancel subscription
+document.querySelectorAll('.cancel-sub-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        const subId = btn.dataset.id;
+        if (!confirm('Cancel this subscription? Partial refund will be calculated.')) return;
+        btn.disabled = true;
+        btn.innerText = '...';
+        try {
+            const resp = await fetch(`/portal/${schema}/gym/subscriptions/${subId}/cancel/`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrftoken }
+            });
+            const data = await resp.json();
+            alert(data.message);
+            if (!data.error) location.reload();
+        } catch(e) { alert('Error: ' + e.message); }
+        finally { btn.disabled = false; }
+    });
+});
+
+// Attendance edit modal
+const attModal = document.getElementById('attEditModal');
+let currentAttId = null;
+document.querySelectorAll('.edit-att-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        currentAttId = btn.dataset.id;
+        const resp = await fetch(`/portal/${schema}/gym/attendance/${currentAttId}/edit/`);
+        const data = await resp.json();
+        if (data.error) { alert(data.error); return; }
+        document.getElementById('editCheckIn').value = data.check_in.slice(0,16);
+        document.getElementById('editCheckOut').value = data.check_out ? data.check_out.slice(0,16) : '';
+        document.getElementById('editNotes').value = data.notes;
+        attModal.style.display = 'flex';
+    });
+});
+attModal.querySelector('.close').onclick = () => attModal.style.display = 'none';
+document.getElementById('attEditForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const btn = attModal.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    try {
+        const resp = await fetch(`/portal/${schema}/gym/attendance/${currentAttId}/edit/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrftoken },
+            body: formData
+        });
+        const data = await resp.json();
+        if (data.message) alert(data.message);
+        else if (data.errors) alert('Error: ' + JSON.stringify(data.errors));
+        if (!data.error) location.reload();
+    } catch(e) { alert('Error: ' + e.message); }
+    finally { btn.disabled = false; attModal.style.display = 'none'; }
+};
+</script>
+{% endblock %}
