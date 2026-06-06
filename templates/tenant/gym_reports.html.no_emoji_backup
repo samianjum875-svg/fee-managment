@@ -386,7 +386,7 @@ async function showCustomerDetail(customerId) {
         <p><strong>Phone:</strong> ${data.phone}</p>
         <p><strong>Email:</strong> ${data.email || '-'}</p>
         <p><strong>Status:</strong> ${data.status}</p>
-        <p><strong>Membership:</strong> ${data.membership_start} <svg class="inline-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18l6-6-6-6"/></svg> ${data.membership_end || 'Ongoing'}</p>
+        <p><strong>Membership:</strong> ${data.membership_start} → ${data.membership_end || 'Ongoing'}</p>
         <p><strong>Monthly Fee:</strong> ₹${data.monthly_fee}</p>
         <p><strong>Total Paid:</strong> ₹${data.total_paid} | <strong>Pending:</strong> ₹${data.pending}</p>
         <h4>Payment History</h4>

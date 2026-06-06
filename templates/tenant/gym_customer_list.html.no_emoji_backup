@@ -226,7 +226,7 @@
                 <tr data-name="{{ c.name|lower }}" data-phone="{{ c.phone }}" data-status="{{ c.status }}" data-pending="{{ c.pending_amount }}" data-membership-end="{{ c.membership_end|date:'Y-m-d'|default:'9999-12-31' }}">
                     <td><strong>{{ c.name }}</strong></td>
                     <td>{{ c.phone }}</td>
-                    <td>{{ c.membership_start|date:"d/m/y" }} <svg class="inline-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18l6-6-6-6"/></svg> {{ c.membership_end|date:"d/m/y"|default:"∞" }}</td>
+                    <td>{{ c.membership_start|date:"d/m/y" }} → {{ c.membership_end|date:"d/m/y"|default:"∞" }}</td>
                     <td>₹{{ c.monthly_fee }}</td>
                     <td class="pending-amount">₹{{ c.pending_amount|floatformat:2 }}</td>
                     <td><span class="status-badge status-{{ c.status }}">{{ c.get_status_display }}</span></td>
@@ -421,7 +421,7 @@
             const monthlyFee = cells[3].innerText.trim();
             const pending = cells[4].innerText.trim();
             const status = cells[5].innerText.trim();
-            csvContent += `"${name}","${phone}","${membership.split(' <svg class="inline-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18l6-6-6-6"/></svg> ')[0]}","${membership.split(' <svg class="inline-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18l6-6-6-6"/></svg> ')[1]}","${monthlyFee}","${pending}","${status}"\n`;
+            csvContent += `"${name}","${phone}","${membership.split(' → ')[0]}","${membership.split(' → ')[1]}","${monthlyFee}","${pending}","${status}"\n`;
         }
         const blob = new Blob([csvContent], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
@@ -451,7 +451,7 @@
             // Update sort icons
             document.querySelectorAll('#customerTable th .sort-icon').forEach(icon => icon.innerHTML = '');
             const iconSpan = th.querySelector('.sort-icon');
-            if (iconSpan) iconSpan.innerHTML = currentSort.direction === 'asc' ? '' : '';
+            if (iconSpan) iconSpan.innerHTML = currentSort.direction === 'asc' ? '▲' : '▼';
         });
     });
 

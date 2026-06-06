@@ -372,8 +372,45 @@
         }
     </style>
     {% block extra_head %}{% endblock %}
+
+    <!-- GYM COLOR OVERRIDE (injected by patcher) -->
+    <style>
+        .tenant-gym {
+            --primary: #f97316;
+            --primary-dark: #ea580c;
+            --primary-light: #fdba74;
+            --primary-bg: rgba(249,115,22,0.1);
+        }
+        /* Ensure gradient texts use new primary colors */
+        .tenant-gym .page-title,
+        .tenant-gym .school-info h2,
+        .tenant-gym .summary-value {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        /* Fix stats card icon color on gym */
+        .tenant-gym .kpi-icon {
+            color: var(--primary);
+        }
+        .tenant-gym .btn-primary {
+            background: var(--primary);
+        }
+        .tenant-gym .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+        .tenant-gym .stat-badge[style*="background: var(--primary)"] {
+            background: var(--primary) !important;
+        }
+        .tenant-gym .quick-filter-btn.active,
+        .tenant-gym .tab.active {
+            background: var(--primary);
+        }
+    </style>
+    
 </head>
-<body>
+<body class="tenant-{{ tenant.tenant_type }}">
     <div class="app">
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">

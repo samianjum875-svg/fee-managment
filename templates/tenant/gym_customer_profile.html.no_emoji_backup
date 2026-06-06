@@ -43,15 +43,15 @@
 <div class="profile-header">
     <div><h1 class="page-title">{{ customer.name }}</h1><p class="page-desc">{{ customer.phone }} • {{ customer.email|default:"No email" }}</p></div>
     <div class="header-actions">
-        <a href="{% url 'gym_customer_edit' schema_name=tenant.schema_name customer_id=customer.id %}" class="btn-secondary"><svg class="inline-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4Z"/></svg> Edit</a>
-        <button id="generateSubscriptionBtn" class="btn-primary"><svg class="inline-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Generate Subscription</button>
-        <a href="{% url 'gym_payment' schema_name=tenant.schema_name customer_id=customer.id %}" class="btn-primary"><svg class="inline-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M8 10h8"/></svg> Collect Payment</a>
-        <a href="{% url 'gym_customer_list' schema_name=tenant.schema_name %}" class="btn-secondary"><svg class="inline-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 18l-6-6 6-6"/></svg> Back</a>
+        <a href="{% url 'gym_customer_edit' schema_name=tenant.schema_name customer_id=customer.id %}" class="btn-secondary">✏️ Edit</a>
+        <button id="generateSubscriptionBtn" class="btn-primary">📅 Generate Subscription</button>
+        <a href="{% url 'gym_payment' schema_name=tenant.schema_name customer_id=customer.id %}" class="btn-primary">💰 Collect Payment</a>
+        <a href="{% url 'gym_customer_list' schema_name=tenant.schema_name %}" class="btn-secondary">← Back</a>
     </div>
 </div>
 
 <div class="info-grid">
-    <div class="info-card"><div class="info-label">Membership</div><div class="info-value">{{ customer.membership_start|date:"Y-m-d" }} <svg class="inline-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18l6-6-6-6"/></svg> {{ customer.membership_end|date:"Y-m-d"|default:"Ongoing" }}</div></div>
+    <div class="info-card"><div class="info-label">Membership</div><div class="info-value">{{ customer.membership_start|date:"Y-m-d" }} → {{ customer.membership_end|date:"Y-m-d"|default:"Ongoing" }}</div></div>
     <div class="info-card"><div class="info-label">Monthly Fee</div><div class="info-value">₹{{ customer.monthly_fee }}</div></div>
     <div class="info-card"><div class="info-label">Status</div><div class="info-value"><span class="status-badge status-{{ customer.status }}">{{ customer.get_status_display }}</span></div></div>
 </div>

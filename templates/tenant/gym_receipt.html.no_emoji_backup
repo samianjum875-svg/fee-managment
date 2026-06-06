@@ -67,9 +67,9 @@
 </div>
 
 <div class="action-buttons">
-    <button onclick="window.print()" class="btn-print"><svg class="inline-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><path d="M6 9V3h12v6"/><rect x="6" y="15" width="12" height="6" rx="2"/></svg> Print</button>
-    <button onclick="downloadReceipt()" class="btn-download"><svg class="inline-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14m-7-7l7 7 7-7"/></svg> Download</button>
-    <a href="{% url 'gym_payment' schema_name=tenant.schema_name %}" class="btn-back"><svg class="inline-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 18l-6-6 6-6"/></svg> Back</a>
+    <button onclick="window.print()" class="btn-print">🖨️ Print</button>
+    <button onclick="downloadReceipt()" class="btn-download">⬇️ Download</button>
+    <a href="{% url 'gym_payment' schema_name=tenant.schema_name %}" class="btn-back">← Back</a>
 </div>
 
 <style>
@@ -124,7 +124,7 @@
         border-bottom: 2px solid #f97316;
     }
     .gym-header {
-        border-bottom-color: var(--primary);
+        border-bottom-color: #f97316;
     }
     .receipt-logo {
         height: 40px;
@@ -133,7 +133,7 @@
     .receipt-icon {
         width: 40px;
         height: 40px;
-        background: var(--primary);
+        background: #f97316;
         border-radius: 0.5rem;
         display: flex;
         align-items: center;
@@ -144,7 +144,7 @@
         margin: 0;
         font-size: 1rem;
         font-weight: 700;
-        background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+        background: linear-gradient(135deg, #f97316, #ea580c);
         -webkit-background-clip: text;
         background-clip: text;
         color: transparent;

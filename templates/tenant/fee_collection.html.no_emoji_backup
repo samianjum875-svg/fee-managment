@@ -84,9 +84,9 @@
                 <tr><td colspan="6" class="empty-row">
                     No students with pending fees.
                     {% if total_pending_all == 0 %}
-                        <br><small> All fees are paid! Use "Generate All Fees" to create fee records for the current month.</small>
+                        <br><small>🎉 All fees are paid! Use "Generate All Fees" to create fee records for the current month.</small>
                     {% else %}
-                        <br><small>ℹ Some students have no pending fees, but there is a total pending amount of ₹{{ total_pending_all }}. Check if fee records exist.</small>
+                        <br><small>ℹ️ Some students have no pending fees, but there is a total pending amount of ₹{{ total_pending_all }}. Check if fee records exist.</small>
                     {% endif %}
                 </td>
                 </tr>
@@ -194,7 +194,7 @@
 <div class="history-card">
     <div class="card-header">
         <h3>Recent Payments (Last 5)</h3>
-        <a href="{% url 'reports' schema_name=tenant.schema_name %}?type=collection" class="view-all">View All <svg class="inline-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18l6-6-6-6"/></svg></a>
+        <a href="{% url 'reports' schema_name=tenant.schema_name %}?type=collection" class="view-all">View All →</a>
     </div>
     <div class="table-responsive">
         <table class="data-table">
@@ -215,11 +215,11 @@
                 <tr>
                     <td colspan="6" class="empty-row">
                         {% if total_payments_count == 0 %}
-                            <strong> No payments recorded for this school yet.</strong>
-                            <br><small> Use the form above to collect a fee, or click <strong>“Generate All Fees”</strong> to create fee records first.</small>
+                            <strong>📭 No payments recorded for this school yet.</strong>
+                            <br><small>👉 Use the form above to collect a fee, or click <strong>“Generate All Fees”</strong> to create fee records first.</small>
                         {% else %}
-                            <strong><svg class="inline-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 9v4m0 4h.01"/><path d="M12 2L1 21h22L12 2z"/></svg> There are {{ total_payments_count }} payment(s) in this school’s database, but they are not showing.</strong>
-                            <br><small>This may be because the associated student records are missing. <a href="{% url 'reports' schema_name=tenant.schema_name %}?type=collection&quick_filter=all">View all payments in Reports <svg class="inline-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18l6-6-6-6"/></svg></a></small>
+                            <strong>⚠️ There are {{ total_payments_count }} payment(s) in this school’s database, but they are not showing.</strong>
+                            <br><small>This may be because the associated student records are missing. <a href="{% url 'reports' schema_name=tenant.schema_name %}?type=collection&quick_filter=all">View all payments in Reports →</a></small>
                         {% endif %}
                     </td>
                 </tr>

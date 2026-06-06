@@ -37,7 +37,7 @@
         <div class="stat-card"><div class="stat-value" id="todayCheckins">0</div><div class="stat-label">Today's Check-ins</div></div>
         <div class="stat-card"><div class="stat-value" id="activeNow">0</div><div class="stat-label">Currently Inside</div></div>
         <div class="stat-card"><div class="stat-value" id="uniqueToday">0</div><div class="stat-label">Unique Customers</div></div>
-        <div class="stat-card"><button id="exportCsvBtn" class="export-btn"> Export Today (CSV)</button></div>
+        <div class="stat-card"><button id="exportCsvBtn" class="export-btn">📥 Export Today (CSV)</button></div>
     </div>
 
     <!-- Check-in Panel -->
@@ -53,8 +53,8 @@
                 </select>
             </div>
             <div class="checkin-actions">
-                <button id="checkinBtn" class="btn-primary"> Check In</button>
-                <button id="refreshBtn" class="btn-icon"></button>
+                <button id="checkinBtn" class="btn-primary">✔ Check In</button>
+                <button id="refreshBtn" class="btn-icon">⟳</button>
             </div>
         </div>
         <div id="checkinMessage" class="info-message" style="display:none;"></div>
@@ -75,7 +75,7 @@
     <div class="checkin-panel">
         <h3>Today's History</h3>
         <div style="margin-bottom: 1rem;">
-            <input type="text" id="searchHistory" placeholder="<svg class="inline-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg> Search by name or phone..." class="search-input" style="width: 300px;">
+            <input type="text" id="searchHistory" placeholder="🔍 Search by name or phone..." class="search-input" style="width: 300px;">
         </div>
         <div class="table-responsive">
             <table class="history-table" id="historyTable">
@@ -208,7 +208,7 @@
             const data = await res.json();
             if (data.error) showToast(data.error, true);
             else {
-                showToast(`<svg class="inline-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 6L9 17l-5-5"/></svg> Checked out ${data.customer_name}`);
+                showToast(`✅ Checked out ${data.customer_name}`);
                 fetchActiveAndHistory(); // refresh both tables
             }
         } catch(e) { showToast(e.message, true); }
@@ -303,14 +303,14 @@
             const data = await res.json();
             if (data.error) showToast(data.error, true);
             else {
-                showToast(`<svg class="inline-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 6L9 17l-5-5"/></svg> ${data.customer_name} checked in`);
+                showToast(`✅ ${data.customer_name} checked in`);
                 document.getElementById('barcodeInput').value = '';
                 fetchActiveAndHistory();
                 // Also reload customer dropdown options (eligibility may change)
                 loadCustomerDropdown();
             }
         } catch(e) { showToast(e.message, true); }
-        finally { btn.disabled = false; btn.innerText = ' Check In'; }
+        finally { btn.disabled = false; btn.innerText = '✔ Check In'; }
     };
 
     async function loadCustomerDropdown() {
