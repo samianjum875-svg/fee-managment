@@ -21,7 +21,6 @@
         </button>
     </div>
 </div>
-
 <!-- Quick Find Student -->
 <div class="filter-card">
     <div class="card-header">
@@ -34,7 +33,6 @@
     </div>
     <div id="searchResult" class="search-result" style="display:none;"></div>
 </div>
-
 <!-- Students with Pending Fees (Filtered & Paginated) -->
 <div class="students-list-card">
     <div class="card-header">
@@ -108,7 +106,6 @@
     </div>
     {% endif %}
 </div>
-
 <!-- Selected Student & Payment Form -->
 {% if selected_student %}
 <div class="student-panel" id="studentPanel">
@@ -122,7 +119,6 @@
         </div>
         <div class="pending-badge">Pending: ₹{{ total_pending }}</div>
     </div>
-
     <form method="post" class="payment-form" id="paymentForm">
         {% csrf_token %}
         <input type="hidden" name="student_id" value="{{ selected_student.id }}">
@@ -152,7 +148,6 @@
             </div>
         </div>
     </form>
-
     <div class="pending-table">
         <h4>Pending Fee Records</h4>
         <div class="table-responsive">
@@ -189,7 +184,6 @@
     </div>
 </div>
 {% endif %}
-
 <!-- Recent Payments History (single, clean section) -->
 <div class="history-card">
     <div class="card-header">
@@ -228,7 +222,6 @@
         </table>
     </div>
 </div>
-
 <style>
 .header-stats { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
 .stat-badge { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: var(--surface-alt); border-radius: 2rem; font-size: 0.85rem; font-weight: 500; border: 1px solid var(--border); }
@@ -263,7 +256,6 @@
 .page-link:hover { background: var(--primary); color: white; }
 .current-page { padding: 0.3rem 0.8rem; background: var(--primary); color: white; border-radius: 2rem; }
 </style>
-
 <script>
 function getCookie(name) {
     let value = null;
@@ -280,12 +272,10 @@ function getCookie(name) {
     return value;
 }
 const csrfToken = getCookie('csrftoken');
-
 function loadStudent(studentId) {
     const url = `/portal/{{ tenant.schema_name }}/fee/collection/${studentId}/`;
     window.location.href = url;
 }
-
 function bindSelectButtons() {
     document.querySelectorAll('.select-student-btn').forEach(btn => {
         btn.removeEventListener('click', window.selectHandler);
@@ -299,12 +289,10 @@ function bindSelectButtons() {
     });
 }
 bindSelectButtons();
-
 // Student search
 const searchInput = document.getElementById('studentSearchInput');
 const searchBtn = document.getElementById('searchStudentBtn');
 const searchResultDiv = document.getElementById('searchResult');
-
 async function performSearch() {
     const q = searchInput.value.trim();
     if (q.length < 2) {
@@ -338,7 +326,6 @@ async function performSearch() {
 }
 searchBtn.addEventListener('click', performSearch);
 searchInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') performSearch(); });
-
 // Remaining amount calculation
 const amountInput = document.getElementById('amountInput');
 const remainingSpan = document.getElementById('remainingAfter');
@@ -352,7 +339,6 @@ if (amountInput && totalPendingSpan) {
     });
     amountInput.dispatchEvent(new Event('input'));
 }
-
 // Generate all fees
 const generateAllBtn = document.getElementById('generateAllBtn');
 if (generateAllBtn) {
@@ -378,7 +364,6 @@ if (generateAllBtn) {
         }
     });
 }
-
 // Generate single fee for current month
 const generateSingleBtn = document.getElementById('generateSingleBtn');
 if (generateSingleBtn) {
@@ -406,7 +391,6 @@ if (generateSingleBtn) {
         }
     });
 }
-
 // Console debug
 console.log('FeeCollection Debug:', {
     recentPaymentsCount: {{ recent_payments|length }},
@@ -414,7 +398,6 @@ console.log('FeeCollection Debug:', {
     pendingTotal: {{ total_pending_all|default:0 }},
     currentTenantSchema: '{{ tenant.schema_name }}'
 });
-
         // Additional debug: if total_payments_count > 0 but recent_payments is empty, show raw payment IDs
         if ({{ total_payments_count|default:0 }} > 0 && {{ recent_payments|length }} === 0) {
             fetch('/api/debug-payments/')
@@ -431,6 +414,5 @@ console.log('FeeCollection Debug:', {
                     }
                 }).catch(e => console.log('Debug fetch failed', e));
         }
-    
 </script>
 {% endblock %}

@@ -347,7 +347,7 @@ def reports(request, schema_name):
 def fee_collection(request, schema_name, student_id=None):
     tenant = get_tenant(request, schema_name)
     with schema_context(schema_name):
-        # Handle POST payment
+        # Handle POST payment (works for both list and student views)
         if request.method == 'POST':
             student_id_post = request.POST.get('student_id')
             amount = request.POST.get('amount')
@@ -357,7 +357,6 @@ def fee_collection(request, schema_name, student_id=None):
                 try:
                     student = Student.objects.get(id=student_id_post)
                     amount = Decimal(amount)
-                    # Get pending records for this student
                     pending_records = student.fee_records.filter(status__in=['pending', 'partial', 'overdue']).order_by('due_date')
                     total_pending = sum(r.remaining for r in pending_records)
                     if amount > total_pending:
@@ -377,7 +376,6 @@ def fee_collection(request, schema_name, student_id=None):
                             remaining = 0
                         record.save()
                         paid_records.append(record)
-                    # Create payment transaction
                     payment = PaymentTransaction.objects.create(
                         student=student,
                         amount=amount,
@@ -397,13 +395,31 @@ def fee_collection(request, schema_name, student_id=None):
                 messages.error(request, "Invalid payment data")
             return redirect('fee_collection', schema_name=schema_name)
 
-        # GET request - prepare filters and student data
+        # ---------- GET request ----------
+        # If student_id is provided, show the dedicated payment page for that student
+        if student_id is not None:
+            try:
+                student = Student.objects.get(id=student_id)
+                pending_records = student.fee_records.filter(status__in=['pending', 'partial', 'overdue']).order_by('due_date')
+                total_pending = sum(r.remaining for r in pending_records)
+                context = {
+                    'tenant': tenant,
+                    'student': student,
+                    'pending_records': pending_records,
+                    'total_pending': total_pending,
+                    'logo_url': tenant.school_logo.url if tenant.school_logo else None,
+                }
+                return render(request, 'tenant/collect_fee.html', context)
+            except Student.DoesNotExist:
+                messages.error(request, "Student not found")
+                return redirect('fee_collection', schema_name=schema_name)
+
+        # Otherwise, show the list of students with pending fees (no inline section)
         search_filter = request.GET.get('pending_search', '')
         grade_filter = request.GET.get('pending_grade', '')
         section_filter = request.GET.get('pending_section', '')
         page_number = request.GET.get('page', 1)
 
-        # Get all students with pending fees (aggregated)
         students_qs = Student.objects.all()
         if search_filter:
             students_qs = students_qs.filter(
@@ -415,7 +431,6 @@ def fee_collection(request, schema_name, student_id=None):
         if section_filter:
             students_qs = students_qs.filter(section=section_filter)
 
-        # Annotate pending total
         pending_students = []
         for s in students_qs:
             pending = sum(fr.remaining for fr in s.fee_records.filter(status__in=['pending', 'partial', 'overdue']))
@@ -424,35 +439,18 @@ def fee_collection(request, schema_name, student_id=None):
                 pending_students.append(s)
         pending_students.sort(key=lambda x: x.pending_total, reverse=True)
 
-        # Pagination
         paginator = Paginator(pending_students, 20)
         pending_page = paginator.get_page(page_number)
 
-        # Selected student details if student_id provided
-        selected_student = None
-        total_pending = 0
-        pending_records = []
-        if student_id:
-            try:
-                selected_student = Student.objects.get(id=student_id)
-                pending_records = selected_student.fee_records.filter(status__in=['pending', 'partial', 'overdue']).order_by('due_date')
-                total_pending = sum(r.remaining for r in pending_records)
-            except Student.DoesNotExist:
-                pass
-
-        # Recent payments
-        recent_payments = list(PaymentTransaction.objects.select_related('student').order_by('-payment_date')[:5])
         total_pending_all = sum(fr.remaining for fr in FeeRecord.objects.filter(status__in=['pending', 'partial', 'overdue']))
         total_payments_count = PaymentTransaction.objects.count()
+        recent_payments = list(PaymentTransaction.objects.select_related('student').order_by('-payment_date')[:5])
         grades = list(Student.objects.values_list('grade', flat=True).distinct().order_by('grade'))
         sections = list(Student.objects.values_list('section', flat=True).distinct().order_by('section'))
 
         context = {
             'tenant': tenant,
             'pending_students': pending_page,
-            'selected_student': selected_student,
-            'total_pending': total_pending,
-            'pending_records': pending_records,
             'recent_payments': recent_payments,
             'total_pending_all': total_pending_all,
             'total_payments_count': total_payments_count,
@@ -464,7 +462,6 @@ def fee_collection(request, schema_name, student_id=None):
             'logo_url': tenant.school_logo.url if tenant.school_logo else None,
         }
         return render(request, 'tenant/fee_collection.html', context)
-
 @csrf_exempt
 @require_http_methods(["GET"])
 def debug_payments_api(request):
