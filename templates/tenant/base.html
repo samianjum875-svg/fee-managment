@@ -2,7 +2,7 @@
 <html lang="en" data-theme="light">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>{% block title %}AXIS School Portal{% endblock %}</title>
     <style>
         * {
@@ -51,7 +51,7 @@
             min-height: 100vh;
         }
 
-        /* SIDEBAR - fixed, no overflow clipping */
+        /* ========== SIDEBAR ========== */
         .sidebar {
             width: 280px;
             background: var(--surface);
@@ -66,7 +66,7 @@
             transition: var(--transition);
             z-index: 50;
             box-shadow: var(--shadow);
-            overflow: visible;   /* important: dropdown not clipped */
+            overflow: visible;
         }
 
         .sidebar.collapsed {
@@ -141,7 +141,6 @@
             border-radius: 8px;
         }
 
-        /* only nav area scrolls */
         .sidebar-nav {
             flex: 1;
             overflow-y: auto;
@@ -182,10 +181,8 @@
             gap: 0.75rem;
         }
 
-        /* PROFILE DROPDOWN - clean styles */
-        .profile-dropdown {
-            position: relative;
-        }
+        /* Profile dropdown (unchanged) */
+        .profile-dropdown { position: relative; }
         .profile-btn {
             display: flex;
             align-items: center;
@@ -200,20 +197,12 @@
             font-weight: 500;
             transition: var(--transition);
         }
-        .profile-btn:hover {
-            background: var(--surface);
-        }
-        .profile-name {
-            flex: 1;
-            text-align: left;
-            font-size: 0.85rem;
-        }
-        .dropdown-arrow {
-            transition: transform 0.2s;
-        }
+        .profile-btn:hover { background: var(--surface); }
+        .profile-name { flex: 1; text-align: left; font-size: 0.85rem; }
+        .dropdown-arrow { transition: transform 0.2s; }
         .dropdown-menu {
             position: absolute;
-            bottom: 100%;          /* open upward by default (ooper) */
+            bottom: 100%;
             left: 0;
             right: 0;
             margin-bottom: 0.5rem;
@@ -229,9 +218,7 @@
             overflow-y: auto;
             min-width: 180px;
         }
-        .dropdown-menu.show {
-            display: block;
-        }
+        .dropdown-menu.show { display: block; }
         .dropdown-item {
             display: flex;
             align-items: center;
@@ -248,26 +235,7 @@
             border: none;
             font-family: inherit;
         }
-        .dropdown-item:hover {
-            background: var(--surface-alt);
-            color: var(--primary);
-        }
-        .dropdown-item svg {
-            stroke: currentColor;
-        }
-
-        /* COLLAPSED SIDEBAR: dropdown opens outside to the right */
-        .sidebar.collapsed .profile-dropdown {
-            position: static;
-        }
-        .sidebar.collapsed .profile-name,
-        .sidebar.collapsed .dropdown-arrow {
-            display: none;
-        }
-        .sidebar.collapsed .profile-btn {
-            justify-content: center;
-            padding: 0.5rem;
-        }
+        .dropdown-item:hover { background: var(--surface-alt); color: var(--primary); }
 
         /* MAIN CONTENT */
         .main-content {
@@ -281,7 +249,70 @@
             margin-left: 80px;
         }
 
-        /* Cards and other components (unchanged) */
+        /* Mobile Overlay */
+        .sidebar-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 40;
+            visibility: hidden;
+            opacity: 0;
+            transition: opacity 0.3s ease, visibility 0s linear 0.3s;
+        }
+        .sidebar-overlay.active {
+            visibility: visible;
+            opacity: 1;
+            transition: opacity 0.3s ease, visibility 0s linear 0s;
+        }
+
+        /* Mobile menu button */
+        .mobile-menu-btn {
+            display: none;
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 60;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 2rem;
+            padding: 0.5rem;
+            cursor: pointer;
+            box-shadow: var(--shadow);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .mobile-menu-btn {
+                display: block;
+            }
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+                width: 280px;
+            }
+            .sidebar.mobile-open {
+                transform: translateX(0);
+            }
+            .sidebar.collapsed {
+                width: 280px;
+                transform: translateX(-100%);
+            }
+            .sidebar.collapsed.mobile-open {
+                transform: translateX(0);
+            }
+            .main-content {
+                margin-left: 0;
+                padding: 1rem;
+            }
+            .sidebar.collapsed ~ .main-content {
+                margin-left: 0;
+            }
+        }
+
+        /* Base card styles (unchanged) */
         .stat-card, .card, .chart-card, .filter-card, .students-list-card, .student-panel, .history-card {
             background: var(--surface);
             backdrop-filter: blur(8px);
@@ -356,24 +387,10 @@
             font-size: 0.7rem;
             font-weight: 600;
         }
-        @media (max-width: 768px) {
-            .sidebar {
-                transform: translateX(-100%);
-                overflow-y: auto;
-            }
-            .sidebar.collapsed {
-                transform: translateX(0);
-                width: 80px;
-            }
-            .main-content {
-                margin-left: 0;
-                padding: 1rem;
-            }
-        }
     </style>
     {% block extra_head %}{% endblock %}
 
-    <!-- GYM COLOR OVERRIDE (injected by patcher) -->
+    <!-- GYM COLOR OVERRIDE -->
     <style>
         .tenant-gym {
             --primary: #f97316;
@@ -381,7 +398,6 @@
             --primary-light: #fdba74;
             --primary-bg: rgba(249,115,22,0.1);
         }
-        /* Ensure gradient texts use new primary colors */
         .tenant-gym .page-title,
         .tenant-gym .school-info h2,
         .tenant-gym .summary-value {
@@ -390,7 +406,6 @@
             background-clip: text;
             color: transparent;
         }
-        /* Fix stats card icon color on gym */
         .tenant-gym .kpi-icon {
             color: var(--primary);
         }
@@ -408,10 +423,19 @@
             background: var(--primary);
         }
     </style>
-    
 </head>
 <body class="tenant-{{ tenant.tenant_type }}">
     <div class="app">
+        <!-- Mobile hamburger button -->
+        <div class="mobile-menu-btn" id="mobileMenuBtn">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+        </div>
+
+        <!-- Sidebar overlay (mobile only) -->
+        <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <div class="logo-area" id="logoArea">
@@ -446,22 +470,21 @@
                     <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
                     <span>Reports</span>
                 </a>
-                                <a href="{% url 'stock_management' schema_name=tenant.schema_name %}" class="nav-item">
+                <a href="{% url 'stock_management' schema_name=tenant.schema_name %}" class="nav-item">
                     <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 7h-4.18A3 3 0 0016 5.18V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v1.18A3 3 0 008.18 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M12 12v4m-2-2h4"/></svg>
                     <span>Stock Management</span>
                 </a>
-<a href="{% url 'fee_structure' schema_name=tenant.schema_name %}" class="nav-item">
+                <a href="{% url 'fee_structure' schema_name=tenant.schema_name %}" class="nav-item">
                     <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
                     <span>Fee Structure</span>
                 </a>
                 {% endif %}
                 {% if tenant.tenant_type == 'gym' %}
-
                 <a href="{% url 'gym_dashboard' schema_name=tenant.schema_name %}" class="nav-item">
                     <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
                     <span>Dashboard</span>
                 </a>
-                    <a href="{% url 'gym_attendance' schema_name=tenant.schema_name %}" class="nav-item">
+                <a href="{% url 'gym_attendance' schema_name=tenant.schema_name %}" class="nav-item">
                     <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                     <span>Attendance</span>
                 </a>
@@ -525,13 +548,18 @@
             {% block body %}{% endblock %}
         </main>
     </div>
+
     <script>
-        // Sidebar collapse / expand
+        // Sidebar collapse / expand (desktop)
         const sidebar = document.getElementById('sidebar');
         const toggleBtn = document.getElementById('sidebarToggleBtn');
         const logoArea = document.getElementById('logoArea');
+        const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+        const overlay = document.getElementById('sidebarOverlay');
+
         const savedState = localStorage.getItem('sidebarCollapsed');
         if (savedState === 'true') sidebar.classList.add('collapsed');
+
         function toggleSidebar() {
             sidebar.classList.toggle('collapsed');
             const isCollapsed = sidebar.classList.contains('collapsed');
@@ -539,15 +567,51 @@
             const svg = toggleBtn.querySelector('svg');
             if (isCollapsed) {
                 svg.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7"/>';
-                // Close dropdown when collapsing to avoid ghost menu
-                const dropdown = document.getElementById('profileDropdown');
-                if (dropdown) dropdown.classList.remove('show');
             } else {
                 svg.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>';
             }
         }
-        toggleBtn.addEventListener('click', toggleSidebar);
-        logoArea.addEventListener('click', toggleSidebar);
+
+        if (toggleBtn) toggleBtn.addEventListener('click', toggleSidebar);
+        if (logoArea) logoArea.addEventListener('click', toggleSidebar);
+
+        // Mobile menu open/close
+        function isMobile() {
+            return window.innerWidth < 768;
+        }
+
+        function openMobileSidebar() {
+            if (!isMobile()) return;
+            sidebar.classList.add('mobile-open');
+            overlay.classList.add('active');
+        }
+
+        function closeMobileSidebar() {
+            sidebar.classList.remove('mobile-open');
+            overlay.classList.remove('active');
+        }
+
+        if (mobileMenuBtn) {
+            mobileMenuBtn.addEventListener('click', openMobileSidebar);
+        }
+        if (overlay) {
+            overlay.addEventListener('click', closeMobileSidebar);
+        }
+        // Also close when clicking the toggle button inside sidebar on mobile
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', function(e) {
+                if (isMobile()) {
+                    e.preventDefault();
+                    closeMobileSidebar();
+                }
+            });
+        }
+        // Close sidebar when a navigation link is clicked on mobile
+        document.querySelectorAll('.nav-item').forEach(link => {
+            link.addEventListener('click', function() {
+                if (isMobile()) closeMobileSidebar();
+            });
+        });
 
         // Theme
         const root = document.documentElement;
@@ -559,7 +623,7 @@
             localStorage.setItem('theme', isDark ? 'light' : 'dark');
         }
 
-        // PROFILE DROPDOWN - FIXED POSITIONING (collapsed mode opens to the right)
+        // Profile dropdown (same as before, with position adjustments)
         (function() {
             const profileBtn = document.getElementById('profileBtn');
             const dropdown = document.getElementById('profileDropdown');
@@ -567,7 +631,6 @@
 
             function positionDropdown() {
                 if (!dropdown.classList.contains('show')) return;
-
                 const rect = profileBtn.getBoundingClientRect();
                 const isCollapsed = sidebar.classList.contains('collapsed');
                 const dropdownHeight = dropdown.offsetHeight;
@@ -576,19 +639,15 @@
                 const viewportHeight = window.innerHeight;
 
                 if (isCollapsed) {
-                    // Collapsed sidebar: fixed position to the right of the button
                     dropdown.style.position = 'fixed';
                     dropdown.style.left = (rect.right + 8) + 'px';
                     dropdown.style.top = rect.top + 'px';
                     dropdown.style.bottom = 'auto';
                     dropdown.style.right = 'auto';
                     dropdown.style.margin = '0';
-
-                    // Horizontal boundary check
                     if (rect.right + dropdownWidth + 8 > viewportWidth) {
                         dropdown.style.left = (rect.left - dropdownWidth - 8) + 'px';
                     }
-                    // Vertical boundary check
                     if (rect.top + dropdownHeight > viewportHeight) {
                         dropdown.style.top = (viewportHeight - dropdownHeight - 10) + 'px';
                     }
@@ -596,17 +655,14 @@
                         dropdown.style.top = '10px';
                     }
                 } else {
-                    // Expanded sidebar: open upward, fallback to downward if space insufficient
                     dropdown.style.position = 'absolute';
                     dropdown.style.left = '0';
                     dropdown.style.right = '0';
                     dropdown.style.bottom = '100%';
                     dropdown.style.top = 'auto';
                     dropdown.style.marginBottom = '0.5rem';
-
                     const spaceAbove = rect.top;
                     if (spaceAbove < dropdownHeight) {
-                        // Not enough space above, open downward
                         dropdown.style.bottom = 'auto';
                         dropdown.style.top = '100%';
                         dropdown.style.marginTop = '0.5rem';
@@ -625,7 +681,6 @@
                     dropdown.classList.remove('show');
                 } else {
                     dropdown.classList.add('show');
-                    // Wait for DOM to compute dimensions
                     setTimeout(positionDropdown, 10);
                 }
             });
@@ -637,7 +692,6 @@
                 if (dropdown.classList.contains('show')) positionDropdown();
             });
 
-            // Observe sidebar class changes (collapse/expand)
             const observer = new MutationObserver(function(mutations) {
                 mutations.forEach(function(mutation) {
                     if (mutation.attributeName === 'class') {
@@ -647,7 +701,6 @@
             });
             observer.observe(sidebar, { attributes: true });
 
-            // Close dropdown when clicking outside
             document.addEventListener('click', function(e) {
                 if (!profileBtn.contains(e.target) && !dropdown.contains(e.target)) {
                     dropdown.classList.remove('show');

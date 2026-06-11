@@ -1,368 +1,751 @@
 #!/usr/bin/env python3
 """
-AXIS Stock Management – Final Fix (Replace View & Template)
-Run: python3 fix_stock_final.py
+AXIS Mobile Sidebar Fix – Add hamburger menu and make sidebar mobile‑friendly.
+Run: python3 fix_mobile_sidebar.py
 """
 
 import os
 import re
 
-VIEWS_PATH = "axis_saas/views.py"
-TEMPLATE_PATH = "templates/tenant/stock_management.html"
+TEMPLATE_PATH = "templates/tenant/base.html"
 
-# ==================== NEW VIEW FUNCTION ====================
-NEW_STOCK_FUNCTION = '''
-@require_tenant_type(['school'])
-def stock_management(request, schema_name):
-    """Main stock management page: list categories and products (RAW SQL)."""
-    from django.shortcuts import render
-    from django.db import connection
-    from .models import ProductCategory, Product
-    from django_tenants.utils import schema_context
-
-    tenant = get_tenant(request, schema_name)
-    with schema_context(schema_name):
-        # RAW SQL for categories
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT id, name, description FROM axis_saas_productcategory ORDER BY name")
-            raw_cats = cursor.fetchall()
-
-        # RAW SQL for products
-        with connection.cursor() as cursor:
-            cursor.execute("""
-                SELECT p.id, p.name, p.sku, p.selling_price, p.quantity, p.notes,
-                       c.id as category_id, c.name as category_name
-                FROM axis_saas_product p
-                JOIN axis_saas_productcategory c ON p.category_id = c.id
-                ORDER BY c.name, p.name
-            """)
-            raw_products = cursor.fetchall()
-
-        # Debug prints
-        print("="*60)
-        print(f"[DEBUG] Stock view for tenant '{schema_name}'")
-        print(f"  RAW categories: {len(raw_cats)}")
-        print(f"  RAW products:   {len(raw_products)}")
-        for prod in raw_products:
-            print(f"    - {prod[1]} (SKU: {prod[2]}, cat: {prod[7]})")
-        print("="*60)
-
-        context = {
-            'tenant': tenant,
-            'raw_cats': raw_cats,
-            'raw_products': raw_products,
-            'logo_url': tenant.school_logo.url if tenant.school_logo else None,
+# New base.html content
+NEW_BASE = """<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>{% block title %}AXIS School Portal{% endblock %}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-    return render(request, 'tenant/stock_management.html', context)
-'''
 
-# ==================== NEW TEMPLATE ====================
-NEW_TEMPLATE = """{% extends 'tenant/base.html' %}
-{% load static %}
-{% block title %}Stock Management | {{ tenant.name }}{% endblock %}
-{% block body %}
-<div class="page-header">
-    <div>
-        <h1 class="page-title">Stock Management</h1>
-        <p class="page-desc">Manage product categories and inventory</p>
-    </div>
-</div>
+        :root {
+            --bg: #f0f2f5;
+            --surface: rgba(255, 255, 255, 0.9);
+            --surface-alt: rgba(249, 250, 251, 0.8);
+            --text: #1f2937;
+            --muted: #6b7280;
+            --primary: #3b82f6;
+            --primary-dark: #2563eb;
+            --danger: #ef4444;
+            --border: rgba(0, 0, 0, 0.1);
+            --shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+            --radius: 1rem;
+            --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
 
-<div class="stock-grid">
-    <!-- Categories Card -->
-    <div class="stock-card">
-        <div class="card-header">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-            <h3>Product Categories</h3>
-            <button class="btn-sm" onclick="openCategoryModal()">+ Add Category</button>
-        </div>
-        <div class="table-responsive">
-            <table class="data-table">
-                <thead>
-                    <tr><th>Name</th><th>Description</th><th>Actions</th></tr>
-                </thead>
-                <tbody>
-                    {% for cat in raw_cats %}
-                    <tr>
-                        <td>{{ cat.1 }}</td>   {# name #}
-                        <td>{{ cat.2|default:"—" }}</td> {# description #}
-                        <td class="action-btns">
-                            <button class="action-icon" onclick="editCategory({{ cat.0 }}, '{{ cat.1|escapejs }}', '{{ cat.2|default:""|escapejs }}')" title="Edit">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4Z"/></svg>
-                            </button>
-                            <button class="action-icon" onclick="deleteCategory({{ cat.0 }}, '{{ cat.1|escapejs }}')" title="Delete">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                            </button>
-                         </td>
-                     </tr>
-                    {% empty %}
-                     <tr><td colspan="3" class="empty-row">No categories yet. Add one.</td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
+        [data-theme="dark"] {
+            --bg: #0f172a;
+            --surface: rgba(30, 41, 59, 0.95);
+            --surface-alt: rgba(51, 65, 85, 0.9);
+            --text: #f1f5f9;
+            --muted: #cbd5e1;
+            --primary: #60a5fa;
+            --primary-dark: #3b82f6;
+            --danger: #f87171;
+            --border: rgba(255, 255, 255, 0.15);
+        }
 
-    <!-- Products Card -->
-    <div class="stock-card">
-        <div class="card-header">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 7h-4.18A3 3 0 0016 5.18V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v1.18A3 3 0 008.18 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M12 12v4m-2-2h4"/></svg>
-            <h3>Products</h3>
-            <button class="btn-sm" onclick="openProductModal()">+ Add Product</button>
-        </div>
-        <div class="table-responsive">
-            <table class="data-table">
-                <thead>
-                    <tr><th>SKU</th><th>Name</th><th>Category</th><th>Price (₹)</th><th>Qty</th><th>Actions</th></tr>
-                </thead>
-                <tbody>
-                    {% for p in raw_products %}
-                     <tr>
-                         <td><code>{{ p.2 }}</code></td>   {# sku #}
-                         <td>{{ p.1 }}</td>                 {# name #}
-                         <td>{{ p.7 }}</td>                 {# category_name #}
-                         <td>₹{{ p.3|floatformat:2 }}</td>  {# selling_price #}
-                         <td>{{ p.4 }}</td>                 {# quantity #}
-                        <td class="action-btns">
-                            <button class="action-icon" onclick="editProduct({{ p.0 }}, '{{ p.1|escapejs }}', {{ p.6 }}, {{ p.3 }}, {{ p.4 }}, '{{ p.5|escapejs }}')" title="Edit">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4Z"/></svg>
-                            </button>
-                            <button class="action-icon" onclick="deleteProduct({{ p.0 }}, '{{ p.1|escapejs }}')" title="Delete">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                            </button>
-                        </td>
-                     </tr>
-                    {% empty %}
-                     <tr><td colspan="6" class="empty-row">No products. Add one.</td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
+        body {
+            font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+            overflow-x: hidden;
+        }
 
-<!-- Category Modal -->
-<div id="categoryModal" class="modal" style="display:none;">
-    <div class="modal-content">
-        <span class="close" onclick="closeCategoryModal()">&times;</span>
-        <h3 id="catModalTitle">Add Category</h3>
-        <form method="post" action="{% url 'add_category' schema_name=tenant.schema_name %}" id="categoryForm">
-            {% csrf_token %}
-            <input type="hidden" name="category_id" id="catId">
-            <div class="form-field"><label>Name</label><input type="text" name="name" id="catName" required></div>
-            <div class="form-field"><label>Description</label><textarea name="description" id="catDesc" rows="2"></textarea></div>
-            <div class="modal-actions">
-                <button type="button" class="btn-secondary" onclick="closeCategoryModal()">Cancel</button>
-                <button type="submit" class="btn-primary" id="catSubmitBtn">Save Category</button>
+        .app {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* ========== SIDEBAR ========== */
+        .sidebar {
+            width: 280px;
+            background: var(--surface);
+            backdrop-filter: blur(12px);
+            border-right: 1px solid var(--border);
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            transition: var(--transition);
+            z-index: 50;
+            box-shadow: var(--shadow);
+            overflow: visible;
+        }
+
+        .sidebar.collapsed {
+            width: 80px;
+        }
+
+        .sidebar.collapsed .school-name,
+        .sidebar.collapsed .nav-item span:not(.nav-icon),
+        .sidebar.collapsed .btn-text {
+            display: none;
+        }
+
+        .sidebar.collapsed .nav-item {
+            justify-content: center;
+            padding: 0.625rem;
+        }
+
+        .sidebar.collapsed .sidebar-header {
+            justify-content: center;
+            padding: 1.5rem 0.5rem;
+        }
+
+        .sidebar.collapsed .logo-area {
+            justify-content: center;
+            width: 100%;
+        }
+
+        .sidebar.collapsed .toggle-btn {
+            display: none;
+        }
+
+        .sidebar-header {
+            padding: 1.5rem 1.25rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo-area {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+        }
+
+        .logo-icon {
+            width: 42px;
+            height: 42px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 1.25rem;
+            color: white;
+            box-shadow: 0 4px 10px rgba(59,130,246,0.3);
+        }
+
+        .school-name {
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+
+        .toggle-btn {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            color: var(--muted);
+            padding: 6px;
+            border-radius: 8px;
+        }
+
+        .sidebar-nav {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem 0.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 0.625rem 0.875rem;
+            border-radius: 12px;
+            color: var(--text);
+            text-decoration: none;
+            transition: var(--transition);
+            font-weight: 500;
+        }
+
+        .nav-item:hover, .nav-item.active {
+            background: rgba(59,130,246,0.15);
+            color: var(--primary);
+        }
+
+        .nav-icon {
+            width: 20px;
+            height: 20px;
+            stroke-width: 1.8;
+        }
+
+        .sidebar-footer {
+            padding: 1rem 1.25rem;
+            border-top: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        /* Profile dropdown (unchanged) */
+        .profile-dropdown { position: relative; }
+        .profile-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            background: var(--surface-alt);
+            border: 1px solid var(--border);
+            border-radius: 2rem;
+            padding: 0.5rem 0.75rem;
+            cursor: pointer;
+            color: var(--text);
+            font-weight: 500;
+            transition: var(--transition);
+        }
+        .profile-btn:hover { background: var(--surface); }
+        .profile-name { flex: 1; text-align: left; font-size: 0.85rem; }
+        .dropdown-arrow { transition: transform 0.2s; }
+        .dropdown-menu {
+            position: absolute;
+            bottom: 100%;
+            left: 0;
+            right: 0;
+            margin-bottom: 0.5rem;
+            background: var(--surface);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 1rem;
+            padding: 0.5rem;
+            display: none;
+            z-index: 10000;
+            box-shadow: var(--shadow);
+            max-height: 300px;
+            overflow-y: auto;
+            min-width: 180px;
+        }
+        .dropdown-menu.show { display: block; }
+        .dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.75rem;
+            color: var(--text);
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: var(--transition);
+            cursor: pointer;
+            width: 100%;
+            background: none;
+            border: none;
+            font-family: inherit;
+        }
+        .dropdown-item:hover { background: var(--surface-alt); color: var(--primary); }
+
+        /* MAIN CONTENT */
+        .main-content {
+            min-height: 100vh;
+            flex: 1;
+            margin-left: 280px;
+            padding: 2rem;
+            transition: var(--transition);
+        }
+        .sidebar.collapsed ~ .main-content {
+            margin-left: 80px;
+        }
+
+        /* Mobile Overlay */
+        .sidebar-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 40;
+            visibility: hidden;
+            opacity: 0;
+            transition: opacity 0.3s ease, visibility 0s linear 0.3s;
+        }
+        .sidebar-overlay.active {
+            visibility: visible;
+            opacity: 1;
+            transition: opacity 0.3s ease, visibility 0s linear 0s;
+        }
+
+        /* Mobile menu button */
+        .mobile-menu-btn {
+            display: none;
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 60;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 2rem;
+            padding: 0.5rem;
+            cursor: pointer;
+            box-shadow: var(--shadow);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .mobile-menu-btn {
+                display: block;
+            }
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+                width: 280px;
+            }
+            .sidebar.mobile-open {
+                transform: translateX(0);
+            }
+            .sidebar.collapsed {
+                width: 280px;
+                transform: translateX(-100%);
+            }
+            .sidebar.collapsed.mobile-open {
+                transform: translateX(0);
+            }
+            .main-content {
+                margin-left: 0;
+                padding: 1rem;
+            }
+            .sidebar.collapsed ~ .main-content {
+                margin-left: 0;
+            }
+        }
+
+        /* Base card styles (unchanged) */
+        .stat-card, .card, .chart-card, .filter-card, .students-list-card, .student-panel, .history-card {
+            background: var(--surface);
+            backdrop-filter: blur(8px);
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            padding: 1.25rem;
+            margin-bottom: 1.5rem;
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+        }
+        .stat-card:hover, .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.12);
+        }
+        .page-title {
+            font-size: 1.8rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            margin-bottom: 0.25rem;
+        }
+        .page-desc {
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+        .btn-primary, .btn-secondary {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.6rem 1.2rem;
+            border-radius: 2rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            border: none;
+        }
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+        }
+        .btn-secondary {
+            background: var(--surface-alt);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .data-table th, .data-table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+        .data-table th {
+            background: var(--surface-alt);
+            font-weight: 600;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 0.2rem 0.6rem;
+            border-radius: 2rem;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+    </style>
+    {% block extra_head %}{% endblock %}
+
+    <!-- GYM COLOR OVERRIDE -->
+    <style>
+        .tenant-gym {
+            --primary: #f97316;
+            --primary-dark: #ea580c;
+            --primary-light: #fdba74;
+            --primary-bg: rgba(249,115,22,0.1);
+        }
+        .tenant-gym .page-title,
+        .tenant-gym .school-info h2,
+        .tenant-gym .summary-value {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        .tenant-gym .kpi-icon {
+            color: var(--primary);
+        }
+        .tenant-gym .btn-primary {
+            background: var(--primary);
+        }
+        .tenant-gym .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+        .tenant-gym .stat-badge[style*="background: var(--primary)"] {
+            background: var(--primary) !important;
+        }
+        .tenant-gym .quick-filter-btn.active,
+        .tenant-gym .tab.active {
+            background: var(--primary);
+        }
+    </style>
+</head>
+<body class="tenant-{{ tenant.tenant_type }}">
+    <div class="app">
+        <!-- Mobile hamburger button -->
+        <div class="mobile-menu-btn" id="mobileMenuBtn">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+        </div>
+
+        <!-- Sidebar overlay (mobile only) -->
+        <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo-area" id="logoArea">
+                    <div class="logo-icon">{{ tenant.name|slice:":2"|upper }}</div>
+                    <span class="school-name">{{ tenant.name }}</span>
+                </div>
+                <button class="toggle-btn" id="sidebarToggleBtn" title="Collapse">
+                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
+                    </svg>
+                </button>
             </div>
-        </form>
-    </div>
-</div>
-
-<!-- Product Modal -->
-<div id="productModal" class="modal" style="display:none;">
-    <div class="modal-content">
-        <span class="close" onclick="closeProductModal()">&times;</span>
-        <h3 id="prodModalTitle">Add Product</h3>
-        <form method="post" action="{% url 'add_product' schema_name=tenant.schema_name %}" id="productForm">
-            {% csrf_token %}
-            <input type="hidden" name="product_id" id="prodId">
-            <div class="form-field">
-                <label>Category</label>
-                <select name="category" id="prodCategory" required>
-                    {% for cat in raw_cats %}
-                    <option value="{{ cat.0 }}">{{ cat.1 }}</option>
-                    {% endfor %}
-                </select>
+            <nav class="sidebar-nav">
+                {% if tenant.tenant_type == 'school' %}
+                <a href="{% url 'dashboard' schema_name=tenant.schema_name %}" class="nav-item {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+                    <span>Dashboard</span>
+                </a>
+                <a href="{% url 'student_list' schema_name=tenant.schema_name %}" class="nav-item {% if 'student' in request.resolver_match.url_name %}active{% endif %}">
+                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                    <span>Students</span>
+                </a>
+                <a href="{% url 'fee_collection' schema_name=tenant.schema_name %}" class="nav-item">
+                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>
+                    <span>Fee Collection</span>
+                </a>
+                <a href="{% url 'defaulters' schema_name=tenant.schema_name %}" class="nav-item">
+                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <span>Defaulters</span>
+                </a>
+                <a href="{% url 'reports' schema_name=tenant.schema_name %}" class="nav-item">
+                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                    <span>Reports</span>
+                </a>
+                <a href="{% url 'stock_management' schema_name=tenant.schema_name %}" class="nav-item">
+                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 7h-4.18A3 3 0 0016 5.18V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v1.18A3 3 0 008.18 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M12 12v4m-2-2h4"/></svg>
+                    <span>Stock Management</span>
+                </a>
+                <a href="{% url 'fee_structure' schema_name=tenant.schema_name %}" class="nav-item">
+                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+                    <span>Fee Structure</span>
+                </a>
+                {% endif %}
+                {% if tenant.tenant_type == 'gym' %}
+                <a href="{% url 'gym_dashboard' schema_name=tenant.schema_name %}" class="nav-item">
+                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+                    <span>Dashboard</span>
+                </a>
+                <a href="{% url 'gym_attendance' schema_name=tenant.schema_name %}" class="nav-item">
+                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <span>Attendance</span>
+                </a>
+                <a href="{% url 'gym_customer_list' schema_name=tenant.schema_name %}" class="nav-item">
+                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                    <span>Customers</span>
+                </a>
+                <a href="{% url 'gym_payment' schema_name=tenant.schema_name %}" class="nav-item">
+                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>
+                    <span>Payments</span>
+                </a>
+                <a href="{% url 'gym_reports' schema_name=tenant.schema_name %}" class="nav-item">
+                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                    <span>Reports</span>
+                </a>
+                <a href="{% url 'gym_settings' schema_name=tenant.schema_name %}" class="nav-item">
+                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    <span>Settings</span>
+                </a>
+                {% endif %}
+            </nav>
+            <div class="sidebar-footer">
+                <div class="profile-dropdown" id="profileDropdownContainer">
+                    <button class="profile-btn" id="profileBtn">
+                        <div class="profile-avatar">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                        </div>
+                        <span class="profile-name">Admin</span>
+                        <svg class="dropdown-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M6 9l6 6 6-6"/>
+                        </svg>
+                    </button>
+                    <div class="dropdown-menu" id="profileDropdown">
+                        <button onclick="toggleTheme()" class="dropdown-item">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                            <span>Theme</span>
+                        </button>
+                        {% if tenant.tenant_type == 'school' %}
+                        <a href="{% url 'fee_settings' schema_name=tenant.schema_name %}" class="dropdown-item">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                            <span>Settings</span>
+                        </a>
+                    {% else %}
+                        <a href="{% url 'gym_settings' schema_name=tenant.schema_name %}" class="dropdown-item">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                            <span>Settings</span>
+                        </a>
+                    {% endif %}
+                        <a href="{% url 'tenant_logout' schema_name=tenant.schema_name %}" class="dropdown-item">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75"/></svg>
+                            <span>Logout</span>
+                        </a>
+                    </div>
+                </div>
             </div>
-            <div class="form-field"><label>Product Name</label><input type="text" name="name" id="prodName" required></div>
-            <div class="form-field"><label>Selling Price (₹)</label><input type="number" step="0.01" name="selling_price" id="prodPrice" required></div>
-            <div class="form-field"><label>Quantity</label><input type="number" name="quantity" id="prodQty" required></div>
-            <div class="form-field"><label>Notes</label><textarea name="notes" id="prodNotes" rows="2"></textarea></div>
-            <div class="modal-actions">
-                <button type="button" class="btn-secondary" onclick="closeProductModal()">Cancel</button>
-                <button type="submit" class="btn-primary" id="prodSubmitBtn">Save Product</button>
-            </div>
-        </form>
+        </aside>
+        <main class="main-content" id="mainContent">
+            {% include "tenant/messages.html" %}
+            {% block body %}{% endblock %}
+        </main>
     </div>
-</div>
 
-<style>
-.stock-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(500px, 1fr)); gap: 1.5rem; }
-.stock-card { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; }
-.card-header { display: flex; align-items: center; gap: 0.75rem; padding: 1rem; background: var(--surface-alt); border-bottom: 1px solid var(--border); }
-.card-header h3 { flex: 1; font-size: 1.1rem; font-weight: 600; }
-.btn-sm { background: var(--primary); color: white; border: none; border-radius: 2rem; padding: 0.3rem 0.8rem; cursor: pointer; font-size: 0.75rem; }
-.modal { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index:1000; }
-.modal-content { background: var(--surface); border-radius: 1rem; padding: 1.5rem; max-width: 500px; width: 90%; }
-.form-field { margin-bottom: 1rem; }
-.form-field label { display: block; font-weight: 600; font-size: 0.8rem; margin-bottom: 0.25rem; }
-.form-field input, .form-field select, .form-field textarea { width: 100%; padding: 0.5rem; border-radius: 0.5rem; border: 1px solid var(--border); background: var(--surface-alt); }
-.modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem; }
-.action-icon { background: none; border: none; cursor: pointer; padding: 0 0.25rem; color: var(--muted); }
-.action-icon:hover { color: var(--primary); }
-.close { float: right; cursor: pointer; font-size: 1.5rem; line-height: 1; }
-.empty-row { text-align: center; padding: 2rem; color: var(--muted); }
-</style>
+    <script>
+        // Sidebar collapse / expand (desktop)
+        const sidebar = document.getElementById('sidebar');
+        const toggleBtn = document.getElementById('sidebarToggleBtn');
+        const logoArea = document.getElementById('logoArea');
+        const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+        const overlay = document.getElementById('sidebarOverlay');
 
-<script>
-function openCategoryModal(editId, editName, editDesc) {
-    const modal = document.getElementById('categoryModal');
-    const title = document.getElementById('catModalTitle');
-    const idField = document.getElementById('catId');
-    const nameField = document.getElementById('catName');
-    const descField = document.getElementById('catDesc');
-    const submitBtn = document.getElementById('catSubmitBtn');
-    if (editId) {
-        title.innerText = 'Edit Category';
-        idField.value = editId;
-        nameField.value = editName;
-        descField.value = editDesc;
-        submitBtn.innerText = 'Update Category';
-    } else {
-        title.innerText = 'Add Category';
-        idField.value = '';
-        nameField.value = '';
-        descField.value = '';
-        submitBtn.innerText = 'Save Category';
-    }
-    modal.style.display = 'flex';
-}
-function closeCategoryModal() {
-    document.getElementById('categoryModal').style.display = 'none';
-}
-function editCategory(id, name, desc) {
-    openCategoryModal(id, name, desc);
-}
-function deleteCategory(id, name) {
-    if (confirm(`Delete category "${name}"? All products in this category will remain but become orphaned.`)) {
-        const form = document.createElement('form');
-        form.method = 'post';
-        form.action = "{% url 'delete_category' schema_name=tenant.schema_name category_id=0 %}".replace('0', id);
-        form.innerHTML = `{% csrf_token %}`;
-        document.body.appendChild(form);
-        form.submit();
-    }
-}
+        const savedState = localStorage.getItem('sidebarCollapsed');
+        if (savedState === 'true') sidebar.classList.add('collapsed');
 
-function openProductModal(editId, editName, editCatId, editPrice, editQty, editNotes) {
-    const modal = document.getElementById('productModal');
-    const title = document.getElementById('prodModalTitle');
-    const idField = document.getElementById('prodId');
-    const nameField = document.getElementById('prodName');
-    const catSelect = document.getElementById('prodCategory');
-    const priceField = document.getElementById('prodPrice');
-    const qtyField = document.getElementById('prodQty');
-    const notesField = document.getElementById('prodNotes');
-    const submitBtn = document.getElementById('prodSubmitBtn');
-    if (editId) {
-        title.innerText = 'Edit Product';
-        idField.value = editId;
-        nameField.value = editName;
-        if (editCatId) catSelect.value = editCatId;
-        priceField.value = editPrice;
-        qtyField.value = editQty;
-        notesField.value = editNotes;
-        submitBtn.innerText = 'Update Product';
-    } else {
-        title.innerText = 'Add Product';
-        idField.value = '';
-        nameField.value = '';
-        catSelect.value = '';
-        priceField.value = '';
-        qtyField.value = '';
-        notesField.value = '';
-        submitBtn.innerText = 'Save Product';
-    }
-    modal.style.display = 'flex';
-}
-function closeProductModal() {
-    document.getElementById('productModal').style.display = 'none';
-}
-function editProduct(id, name, catId, price, qty, notes) {
-    openProductModal(id, name, catId, price, qty, notes);
-}
-function deleteProduct(id, name) {
-    if (confirm(`Delete product "${name}"?`)) {
-        const form = document.createElement('form');
-        form.method = 'post';
-        form.action = "{% url 'delete_product' schema_name=tenant.schema_name product_id=0 %}".replace('0', id);
-        form.innerHTML = `{% csrf_token %}`;
-        document.body.appendChild(form);
-        form.submit();
-    }
-}
-window.onclick = function(event) {
-    const catModal = document.getElementById('categoryModal');
-    const prodModal = document.getElementById('productModal');
-    if (event.target === catModal) closeCategoryModal();
-    if (event.target === prodModal) closeProductModal();
-}
-</script>
-{% endblock %}
+        function toggleSidebar() {
+            sidebar.classList.toggle('collapsed');
+            const isCollapsed = sidebar.classList.contains('collapsed');
+            localStorage.setItem('sidebarCollapsed', isCollapsed);
+            const svg = toggleBtn.querySelector('svg');
+            if (isCollapsed) {
+                svg.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7"/>';
+            } else {
+                svg.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>';
+            }
+        }
+
+        if (toggleBtn) toggleBtn.addEventListener('click', toggleSidebar);
+        if (logoArea) logoArea.addEventListener('click', toggleSidebar);
+
+        // Mobile menu open/close
+        function isMobile() {
+            return window.innerWidth < 768;
+        }
+
+        function openMobileSidebar() {
+            if (!isMobile()) return;
+            sidebar.classList.add('mobile-open');
+            overlay.classList.add('active');
+        }
+
+        function closeMobileSidebar() {
+            sidebar.classList.remove('mobile-open');
+            overlay.classList.remove('active');
+        }
+
+        if (mobileMenuBtn) {
+            mobileMenuBtn.addEventListener('click', openMobileSidebar);
+        }
+        if (overlay) {
+            overlay.addEventListener('click', closeMobileSidebar);
+        }
+        // Also close when clicking the toggle button inside sidebar on mobile
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', function(e) {
+                if (isMobile()) {
+                    e.preventDefault();
+                    closeMobileSidebar();
+                }
+            });
+        }
+        // Close sidebar when a navigation link is clicked on mobile
+        document.querySelectorAll('.nav-item').forEach(link => {
+            link.addEventListener('click', function() {
+                if (isMobile()) closeMobileSidebar();
+            });
+        });
+
+        // Theme
+        const root = document.documentElement;
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme === 'dark') root.setAttribute('data-theme', 'dark');
+        function toggleTheme() {
+            const isDark = root.getAttribute('data-theme') === 'dark';
+            root.setAttribute('data-theme', isDark ? 'light' : 'dark');
+            localStorage.setItem('theme', isDark ? 'light' : 'dark');
+        }
+
+        // Profile dropdown (same as before, with position adjustments)
+        (function() {
+            const profileBtn = document.getElementById('profileBtn');
+            const dropdown = document.getElementById('profileDropdown');
+            if (!profileBtn || !dropdown) return;
+
+            function positionDropdown() {
+                if (!dropdown.classList.contains('show')) return;
+                const rect = profileBtn.getBoundingClientRect();
+                const isCollapsed = sidebar.classList.contains('collapsed');
+                const dropdownHeight = dropdown.offsetHeight;
+                const dropdownWidth = dropdown.offsetWidth;
+                const viewportWidth = window.innerWidth;
+                const viewportHeight = window.innerHeight;
+
+                if (isCollapsed) {
+                    dropdown.style.position = 'fixed';
+                    dropdown.style.left = (rect.right + 8) + 'px';
+                    dropdown.style.top = rect.top + 'px';
+                    dropdown.style.bottom = 'auto';
+                    dropdown.style.right = 'auto';
+                    dropdown.style.margin = '0';
+                    if (rect.right + dropdownWidth + 8 > viewportWidth) {
+                        dropdown.style.left = (rect.left - dropdownWidth - 8) + 'px';
+                    }
+                    if (rect.top + dropdownHeight > viewportHeight) {
+                        dropdown.style.top = (viewportHeight - dropdownHeight - 10) + 'px';
+                    }
+                    if (rect.top < 0) {
+                        dropdown.style.top = '10px';
+                    }
+                } else {
+                    dropdown.style.position = 'absolute';
+                    dropdown.style.left = '0';
+                    dropdown.style.right = '0';
+                    dropdown.style.bottom = '100%';
+                    dropdown.style.top = 'auto';
+                    dropdown.style.marginBottom = '0.5rem';
+                    const spaceAbove = rect.top;
+                    if (spaceAbove < dropdownHeight) {
+                        dropdown.style.bottom = 'auto';
+                        dropdown.style.top = '100%';
+                        dropdown.style.marginTop = '0.5rem';
+                        dropdown.style.marginBottom = '0';
+                    } else {
+                        dropdown.style.bottom = '100%';
+                        dropdown.style.marginBottom = '0.5rem';
+                    }
+                }
+            }
+
+            profileBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const isVisible = dropdown.classList.contains('show');
+                if (isVisible) {
+                    dropdown.classList.remove('show');
+                } else {
+                    dropdown.classList.add('show');
+                    setTimeout(positionDropdown, 10);
+                }
+            });
+
+            window.addEventListener('resize', function() {
+                if (dropdown.classList.contains('show')) positionDropdown();
+            });
+            window.addEventListener('scroll', function() {
+                if (dropdown.classList.contains('show')) positionDropdown();
+            });
+
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.attributeName === 'class') {
+                        if (dropdown.classList.contains('show')) positionDropdown();
+                    }
+                });
+            });
+            observer.observe(sidebar, { attributes: true });
+
+            document.addEventListener('click', function(e) {
+                if (!profileBtn.contains(e.target) && !dropdown.contains(e.target)) {
+                    dropdown.classList.remove('show');
+                }
+            });
+            dropdown.addEventListener('click', function(e) {
+                e.stopPropagation();
+            });
+        })();
+    </script>
+</body>
+</html>
 """
 
-def patch_views():
-    """Replace the entire stock_management function in views.py."""
-    if not os.path.exists(VIEWS_PATH):
-        print(f"❌ {VIEWS_PATH} not found.")
-        return False
-
-    with open(VIEWS_PATH, "r") as f:
-        content = f.read()
-
-    # Backup
-    backup = VIEWS_PATH + ".bak"
-    if not os.path.exists(backup):
-        with open(backup, "w") as bf:
-            bf.write(content)
-        print(f"✅ Backup saved to {backup}")
-
-    # Find the stock_management function (from "def stock_management" to the next "def " at same indentation)
-    pattern = r'(def stock_management\(request, schema_name\):.*?)(?=\n@require_tenant_type|\ndef [a-zA-Z_]|$)'
-    match = re.search(pattern, content, re.DOTALL)
-    if not match:
-        print("❌ Could not find stock_management function. It may have been modified.")
-        return False
-
-    old_func = match.group(1)
-    # Replace with new function
-    new_content = content.replace(old_func, NEW_STOCK_FUNCTION)
-    with open(VIEWS_PATH, "w") as f:
-        f.write(new_content)
-    print("✅ Replaced stock_management function in views.py")
-    return True
-
-def patch_template():
-    """Replace stock_management.html with new template."""
+def main():
     if not os.path.exists(TEMPLATE_PATH):
-        print(f"❌ Template {TEMPLATE_PATH} not found.")
-        return False
+        print(f"❌ Template not found at {TEMPLATE_PATH}")
+        return
 
+    # Backup original
     backup = TEMPLATE_PATH + ".bak"
     if not os.path.exists(backup):
         import shutil
         shutil.copy2(TEMPLATE_PATH, backup)
-        print(f"✅ Template backup saved to {backup}")
+        print(f"✅ Backup saved to {backup}")
 
     with open(TEMPLATE_PATH, "w") as f:
-        f.write(NEW_TEMPLATE)
-    print(f"✅ Replaced {TEMPLATE_PATH} with final version.")
-    return True
+        f.write(NEW_BASE)
 
-def main():
-    print("="*60)
-    print("AXIS Stock Management – Final Fix")
-    print("This will replace the stock_management view and template.")
-    print("="*60)
-    if patch_views():
-        print("\n✅ View patched successfully.")
-    else:
-        print("\n❌ View patching failed – manual intervention may be needed.")
-    patch_template()
-    print("\n⚠️  RESTART the Django server: python manage.py runserver")
-    print("   Then refresh the Stock Management page. Products should appear.")
-    print("\nIf products still don't appear, check the terminal debug output (raw products count).")
+    print(f"✅ Mobile‑friendly sidebar installed in {TEMPLATE_PATH}")
+    print("\n🚀 Refresh the page in your browser (mobile view or resize window).")
+    print("   On mobile, a hamburger button appears at top‑left. Click it to open the sidebar.")
+    print("   On desktop, the sidebar behaves as before (collapsible).")
 
 if __name__ == "__main__":
     main()
