@@ -183,17 +183,18 @@ def fee_receipt(request, schema_name, receipt_id):
         fee_records = list(payment.fee_records.all())
         item_breakdown = []
         remarks = payment.remarks or ''
-        lowered_remarks = remarks.lower()
-        marker_index = lowered_remarks.find('items sold:')
-        if marker_index == -1:
-            marker_index = lowered_remarks.find('items sold')
-        if marker_index != -1:
-            raw = remarks[marker_index + len('items sold:') if 'items sold:' in lowered_remarks else marker_index + len('items sold'):]
+        import re
+
+        marker_match = re.search(r'items sold\s*:\s*(.*)', remarks, flags=re.IGNORECASE)
+        if not marker_match:
+            marker_match = re.search(r'items sold\s+(.*)', remarks, flags=re.IGNORECASE)
+
+        if marker_match:
+            raw = marker_match.group(1)
             for chunk in raw.split(';'):
-                chunk = chunk.strip()
-                if not chunk:
-                    continue
-                item_breakdown.append(chunk)
+                chunk = chunk.strip().strip('.').strip()
+                if chunk:
+                    item_breakdown.append(chunk)
         context = {
             'tenant': tenant,
             'payment': payment,
