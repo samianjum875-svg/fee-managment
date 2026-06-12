@@ -152,9 +152,11 @@ def student_profile(request, schema_name, student_id):
         payments = list(payments_qs)
         pending_total = total_fee - total_paid
         item_purchase_summary = []
+        item_purchase_total = Decimal('0.00')
         for payment in payments:
             remarks = (payment.remarks or '').strip()
             if 'items sold' in remarks.lower():
+                item_purchase_total += payment.amount
                 item_purchase_summary.append({
                     'receipt': payment.receipt_number,
                     'amount': float(payment.amount),
@@ -165,6 +167,7 @@ def student_profile(request, schema_name, student_id):
     context = {
         'tenant': tenant, 'student': student, 'fee_records': fee_records, 'payments': payments,
         'total_fee': total_fee, 'total_paid': total_paid, 'pending_total': pending_total,
+        'item_purchase_total': item_purchase_total,
         'item_purchase_summary': item_purchase_summary,
         'current_month': current_month,
         'current_year': current_year,
@@ -178,10 +181,20 @@ def fee_receipt(request, schema_name, receipt_id):
     with schema_context(schema_name):
         payment = get_object_or_404(PaymentTransaction.objects.select_related('student'), id=receipt_id)
         fee_records = list(payment.fee_records.all())
+        item_breakdown = []
+        remarks = payment.remarks or ''
+        if 'items sold:' in remarks.lower():
+            raw = remarks.split('items sold:', 1)[1]
+            for chunk in raw.split(';'):
+                chunk = chunk.strip()
+                if not chunk:
+                    continue
+                item_breakdown.append(chunk)
         context = {
             'tenant': tenant,
             'payment': payment,
             'fee_records': fee_records,
+            'item_breakdown': item_breakdown,
             'logo_url': tenant.school_logo.url if tenant.school_logo else None,
         }
     return render(request, 'tenant/receipt.html', context)
@@ -397,29 +410,24 @@ def fee_collection(request, schema_name, student_id=None):
                         product_total += line_total
                         item_breakdown.append((product, qty, line_total))
 
-                    if amount < product_total:
-                        messages.error(request, 'Amount is less than the selected item total.')
-                        return redirect('fee_collection', schema_name=schema_name, student_id=student.id)
-
                     pending_records = student.fee_records.filter(status__in=['pending', 'partial', 'overdue']).order_by('due_date')
                     total_pending = sum(r.remaining for r in pending_records)
-                    fee_portion = amount - product_total
-                    if fee_portion < 0:
-                        fee_portion = Decimal('0.00')
+                    total_due = Decimal(total_pending) + product_total
 
-                    fee_to_apply = min(fee_portion, Decimal(total_pending)) if total_pending else Decimal('0.00')
+                    amount_received = amount
+                    fee_to_apply = min(amount_received, Decimal(total_pending)) if total_pending else Decimal('0.00')
+                    amount_left = amount_received - fee_to_apply
+                    item_to_apply = min(amount_left, product_total) if product_total else Decimal('0.00')
+
                     remaining = fee_to_apply
                     paid_records = []
                     for record in pending_records:
                         if remaining <= 0:
                             break
                         due = record.remaining
-                        if remaining >= due:
-                            record.paid_amount = record.amount
-                            remaining -= due
-                        else:
-                            record.paid_amount += remaining
-                            remaining = 0
+                        apply_now = min(due, remaining)
+                        record.paid_amount += apply_now
+                        remaining -= apply_now
                         record.save()
                         paid_records.append(record)
 
@@ -430,13 +438,13 @@ def fee_collection(request, schema_name, student_id=None):
                             amount=fee_to_apply,
                             payment_mode=payment_mode,
                             payment_type='full' if fee_to_apply >= Decimal(total_pending) else 'partial',
-                            remarks=remarks or 'Fee payment',
+                            remarks=(remarks or 'Fee payment').strip() or 'Fee payment',
                             created_by=request.session.get('school_admin_username', 'admin')
                         )
                         fee_payment.fee_records.set(paid_records)
 
                     item_payment = None
-                    if item_breakdown:
+                    if item_breakdown and item_to_apply > 0:
                         item_details = '; '.join([
                             f"{product.name} x{qty} @ ₹{product.selling_price} = ₹{line_total}"
                             for product, qty, line_total in item_breakdown
@@ -444,15 +452,24 @@ def fee_collection(request, schema_name, student_id=None):
                         item_note = (remarks + '\n' if remarks else '') + 'Items sold: ' + item_details
                         item_payment = PaymentTransaction.objects.create(
                             student=student,
-                            amount=product_total,
+                            amount=item_to_apply,
                             payment_mode=payment_mode,
-                            payment_type='full',
+                            payment_type='partial' if item_to_apply < product_total else 'full',
                             remarks=item_note,
                             created_by=request.session.get('school_admin_username', 'admin')
                         )
                         for product, qty, _ in item_breakdown:
                             product.quantity -= qty
                             product.save(update_fields=['quantity'])
+                    elif item_breakdown:
+                        # Keep the selected item list for the receipt and profile summary,
+                        # but do not reduce stock unless the item portion of the payment is actually applied.
+                        pass
+
+                    if amount_received > total_due:
+                        messages.info(request, f'Payment received exceeds total due by ₹{(amount_received - total_due):.2f}.')
+                    elif amount_received < total_due:
+                        messages.info(request, f'Amount received covers pending fee and selected items partially. Remaining balance: ₹{(total_due - amount_received):.2f}.')
 
                     if fee_payment:
                         messages.success(request, f"Fee payment of ₹{fee_to_apply} received. Receipt: {fee_payment.receipt_number}")

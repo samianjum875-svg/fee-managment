@@ -46,6 +46,17 @@
             {% if payment.remarks %}<div><span class="summary-label">Remarks</span><span class="summary-value">{{ payment.remarks }}</span></div>{% endif %}
         </div>
 
+        {% if item_breakdown %}
+        <div class="fee-table">
+            <h4>Item Charges</h4>
+            <ul class="item-breakdown-list">
+                {% for item in item_breakdown %}
+                <li>{{ item }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
         <div class="fee-table">
             <h4>Fee Details</h4>
             <table>
@@ -223,6 +234,7 @@
         font-size: 0.75rem;
         font-weight: 600;
     }
+    .item-breakdown-list { margin: 0; padding-left: 1rem; color: var(--text); font-size: 0.68rem; line-height: 1.4; }
     .fee-table table {
         width: 100%;
         border-collapse: collapse;

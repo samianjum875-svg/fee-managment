@@ -28,28 +28,49 @@
     </div>
 
     <div class="students-list-card" style="margin-top: 1rem; margin-bottom: 1rem;">
-        <div class="card-header">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 7h-4.18A3 3 0 0016 5.18V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v1.18A3 3 0 008.18 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M12 12v4m-2-2h4"/></svg>
-            <h3>School Items & Add-on Products</h3>
+        <div class="item-hero">
+            <div>
+                <div class="card-header" style="padding: 0; border: none; background: transparent; margin-bottom: 0.25rem;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 7h-4.18A3 3 0 0016 5.18V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v1.18A3 3 0 008.18 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M12 12v4m-2-2h4"/></svg>
+                    <h3>School Items & Add-on Products</h3>
+                </div>
+                <p class="page-desc">Choose items from a clean popup drawer instead of a long inline panel.</p>
+            </div>
+            <button type="button" id="openItemsModalBtn" class="btn-primary">Add Items</button>
         </div>
-        <p class="page-desc">Select available stock items while collecting fees. Stock quantities reduce automatically on checkout.</p>
-        <div class="item-grid">
-            {% for product in products %}
-            <article class="item-card" data-product-id="{{ product.id }}" data-name="{{ product.name }}" data-price="{{ product.selling_price }}" data-qty="{{ product.quantity }}">
-                <div class="item-chip">{{ product.category.name }}</div>
-                <h4>{{ product.name }}</h4>
-                <p class="item-meta">Price: ₹{{ product.selling_price|floatformat:2 }} • Stock: {{ product.quantity }}</p>
-                <p class="item-meta">{{ product.notes|default:'No notes provided.' }}</p>
-                <button type="button" class="btn-mini add-item-btn">Add to cart</button>
-            </article>
-            {% empty %}
-            <div class="empty-row">No stock items yet. Add products in Stock Management first.</div>
-            {% endfor %}
+        <div class="mini-summary-grid">
+            <div class="mini-summary-card"><span>Pending Fee</span><strong>₹{{ total_pending|floatformat:2 }}</strong></div>
+            <div class="mini-summary-card"><span>Selected Items</span><strong>₹<span id="miniCartTotal">0.00</span></strong></div>
+            <div class="mini-summary-card"><span>Total Due</span><strong>₹<span id="miniTotalDue">{{ total_pending|floatformat:2 }}</span></strong></div>
         </div>
-        <div class="cart-box">
-            <div class="card-header" style="padding: 0 0 0.35rem 0; border: none; background: transparent;"><h3 style="font-size: 1rem; margin: 0;">Selected Items</h3><span id="cartCount" class="pill-badge">0 items</span></div>
-            <div id="cartItems" class="cart-items">No items selected yet.</div>
-            <div class="cart-total">Item Total: ₹<span id="cartTotal">0.00</span></div>
+        <div id="itemModal" class="modal item-modal" style="display:none;">
+            <div class="modal-card">
+                <div class="modal-head">
+                    <div>
+                        <h3 style="margin:0;">Select Stock Items</h3>
+                        <p class="page-desc" style="margin: 0.2rem 0 0;">Stock quantities reduce automatically when payment is saved.</p>
+                    </div>
+                    <button type="button" id="closeItemsModalBtn" class="btn-secondary">Close</button>
+                </div>
+                <div class="item-grid">
+                    {% for product in products %}
+                    <article class="item-card" data-product-id="{{ product.id }}" data-name="{{ product.name }}" data-price="{{ product.selling_price }}" data-qty="{{ product.quantity }}">
+                        <div class="item-chip">{{ product.category.name }}</div>
+                        <h4>{{ product.name }}</h4>
+                        <p class="item-meta">Price: ₹{{ product.selling_price|floatformat:2 }} • Stock: {{ product.quantity }}</p>
+                        <p class="item-meta">{{ product.notes|default:'No notes provided.' }}</p>
+                        <button type="button" class="btn-mini add-item-btn">Add to cart</button>
+                    </article>
+                    {% empty %}
+                    <div class="empty-row">No stock items yet. Add products in Stock Management first.</div>
+                    {% endfor %}
+                </div>
+                <div class="cart-box">
+                    <div class="card-header" style="padding: 0 0 0.35rem 0; border: none; background: transparent;"><h3 style="font-size: 1rem; margin: 0;">Selected Items</h3><span id="cartCount" class="pill-badge">0 items</span></div>
+                    <div id="cartItems" class="cart-items">No items selected yet.</div>
+                    <div class="cart-total">Item Total: ₹<span id="cartTotal">0.00</span></div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -61,6 +82,7 @@
             <div class="form-field">
                 <label>Amount Received (₹)</label>
                 <input type="number" name="amount" id="amountInput" step="0.01" required placeholder="Enter amount">
+                <small class="field-hint">This amount is applied to the pending fee first, then to selected items.</small>
             </div>
             <div class="form-field">
                 <label>Payment Mode</label>
@@ -74,7 +96,7 @@
             <div class="form-field">
                 <label>Remaining After Payment</label>
                 <input type="text" id="remainingAfter" readonly placeholder="Will be calculated">
-            </div>
+                <small class="field-hint">Pending fee + item charges are combined for this calculation.</small>
             <div class="form-field">
                 <label>Selected Items</label>
                 <div class="pill-badge" id="feeItemSummary">₹0.00</div>
@@ -180,6 +202,9 @@ const totalPendingSpan = document.getElementById('totalPending');
 const amountInput = document.getElementById('amountInput');
 const remainingSpan = document.getElementById('remainingAfter');
 const totalDueSummary = document.getElementById('totalDueSummary');
+const openItemsModalBtn = document.getElementById('openItemsModalBtn');
+const closeItemsModalBtn = document.getElementById('closeItemsModalBtn');
+const itemModal = document.getElementById('itemModal');
 const itemCart = {};
 function formatMoney(v) { return '₹' + Number(v).toFixed(2); }
 function getBasePendingTotal() {
@@ -204,6 +229,8 @@ function syncItemCart() {
     const feeItemSummary = document.getElementById('feeItemSummary');
     const productItemsJson = document.getElementById('productItemsJson');
     const entries = Object.values(itemCart);
+    const miniCartTotal = document.getElementById('miniCartTotal');
+    const miniTotalDue = document.getElementById('miniTotalDue');
     if (!entries.length) {
         cartItems.innerHTML = 'No items selected yet.';
         cartCount.textContent = '0 items';
@@ -221,6 +248,8 @@ function syncItemCart() {
     cartItems.innerHTML = html;
     cartCount.textContent = entries.length + ' item(s)';
     cartTotal.textContent = total.toFixed(2);
+    if (miniCartTotal) miniCartTotal.textContent = total.toFixed(2);
+    if (miniTotalDue) miniTotalDue.textContent = (getBasePendingTotal() + total).toFixed(2);
     feeItemSummary.textContent = formatMoney(total);
     productItemsJson.value = JSON.stringify(entries.map(e => ({ product_id: e.id, quantity: e.qty })));
     updateDueSummary();
@@ -254,6 +283,28 @@ document.querySelectorAll('.add-item-btn').forEach(btn => {
         if (card) addToCart(Number(card.dataset.productId));
     });
 });
+if (openItemsModalBtn && itemModal) {
+    openItemsModalBtn.addEventListener('click', () => { itemModal.style.display = 'flex'; });
+}
+if (closeItemsModalBtn && itemModal) {
+    closeItemsModalBtn.addEventListener('click', () => { itemModal.style.display = 'none'; });
+}
+if (itemModal) {
+    itemModal.addEventListener('click', (event) => {
+        if (event.target === itemModal) itemModal.style.display = 'none';
+    });
+}
+if (openItemsModalBtn && itemModal) {
+    openItemsModalBtn.addEventListener('click', () => { itemModal.style.display = 'flex'; });
+}
+if (closeItemsModalBtn && itemModal) {
+    closeItemsModalBtn.addEventListener('click', () => { itemModal.style.display = 'none'; });
+}
+if (itemModal) {
+    itemModal.addEventListener('click', (event) => {
+        if (event.target === itemModal) itemModal.style.display = 'none';
+    });
+}
 if (amountInput && remainingSpan) {
     amountInput.addEventListener('input', function() {
         updateDueSummary();
