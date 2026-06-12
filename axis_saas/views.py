@@ -467,11 +467,15 @@ def fee_collection(request, schema_name, student_id=None):
                 student = Student.objects.get(id=student_id)
                 pending_records = student.fee_records.filter(status__in=['pending', 'partial', 'overdue']).order_by('due_date')
                 total_pending = sum(r.remaining for r in pending_records)
+                products = list(Product.objects.select_related('category').filter(quantity__gt=0).order_by('category__name', 'name'))
+                categories = list(ProductCategory.objects.all().order_by('name'))
                 context = {
                     'tenant': tenant,
                     'student': student,
                     'pending_records': pending_records,
                     'total_pending': total_pending,
+                    'products': products,
+                    'categories': categories,
                     'logo_url': tenant.school_logo.url if tenant.school_logo else None,
                 }
                 return render(request, 'tenant/collect_fee.html', context)
