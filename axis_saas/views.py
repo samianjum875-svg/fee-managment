@@ -137,44 +137,108 @@ def student_list(request, schema_name):
 @require_tenant_type(['school'])
 def student_profile(request, schema_name, student_id):
     tenant = get_tenant(request, schema_name)
+    page = request.GET.get('page', 1)
+    search_date = request.GET.get('date', '').strip()
     with schema_context(schema_name):
         student = get_object_or_404(Student, id=student_id)
-        
-        from datetime import date
         today = date.today()
         current_month = today.month
         current_year = today.year
+
         fee_records_qs = student.fee_records.all().order_by('-year', '-month')
         total_fee = fee_records_qs.aggregate(Sum('amount'))['amount__sum'] or 0
         fee_records = list(fee_records_qs)
-        payments_qs = student.payments.all().order_by('-payment_date')
-        total_paid = payments_qs.aggregate(Sum('amount'))['amount__sum'] or 0
-        payments = list(payments_qs)
-        pending_total = total_fee - total_paid
-        item_purchase_summary = []
-        item_purchase_total = Decimal('0.00')
-        for payment in payments:
-            remarks = (payment.remarks or '').strip()
-            if 'items sold' in remarks.lower():
-                item_purchase_total += payment.amount
-                item_purchase_summary.append({
-                    'receipt': payment.receipt_number,
-                    'amount': float(payment.amount),
-                    'date': payment.payment_date.strftime('%d %b %Y'),
-                    'remarks': remarks,
-                    'url': f'/portal/{schema_name}/fee/receipt/{payment.id}/',
-                })
-    context = {
-        'tenant': tenant, 'student': student, 'fee_records': fee_records, 'payments': payments,
-        'total_fee': total_fee, 'total_paid': total_paid, 'pending_total': pending_total,
-        'item_purchase_total': item_purchase_total,
-        'item_purchase_summary': item_purchase_summary,
-        'current_month': current_month,
-        'current_year': current_year,
-        'logo_url': tenant.school_logo.url if tenant.school_logo else None,
-    }
-    return render(request, 'tenant/student_profile.html', context)
 
+        # Get all payments, ordered by date ascending for cumulative calculation
+        payments_qs_all = student.payments.all().order_by('payment_date')
+        if search_date:
+            try:
+                from datetime import datetime
+                parsed = datetime.strptime(search_date, '%Y-%m-%d').date()
+                payments_qs_all = payments_qs_all.filter(payment_date=parsed)
+            except ValueError:
+                pass
+
+        # First pass: compute total items cost from all payments
+        total_items_cost_all = Decimal('0')
+        items_cost_per_payment = {}
+        for p in payments_qs_all:
+            items = _extract_item_sales_from_remarks(p.remarks or '')
+            cost = sum(item['line_total'] for item in items)
+            items_cost_per_payment[p.id] = cost
+            total_items_cost_all += cost
+
+        # Second pass: compute cumulative fee and items paid, and remaining balance
+        cumulative_fee_paid = Decimal('0')
+        cumulative_items_paid = Decimal('0')
+        payment_list = []
+
+        for p in payments_qs_all:
+            # fee_paid = sum of paid_amount of linked fee records for this payment
+            fee_paid = sum(fr.paid_amount for fr in p.fee_records.all())
+            items_cost = items_cost_per_payment.get(p.id, Decimal('0'))
+            items_paid = p.amount - fee_paid  # rest goes to items
+
+            # total due before this payment = (total_fee - cumulative_fee_paid_before) + (total_items_cost_all - cumulative_items_paid_before)
+            total_due_before = (total_fee - cumulative_fee_paid) + (total_items_cost_all - cumulative_items_paid)
+
+            cumulative_fee_paid += fee_paid
+            cumulative_items_paid += items_paid
+
+            # remaining balance after this payment
+            remaining_balance = (total_fee - cumulative_fee_paid) + (total_items_cost_all - cumulative_items_paid)
+            if remaining_balance < 0:
+                remaining_balance = Decimal('0')
+
+            # Determine type
+            has_fee = p.fee_records.exists()
+            remarks = (p.remarks or '').lower()
+            has_items = 'items sold' in remarks
+            if has_fee and has_items:
+                p_type = 'Fee & Items'
+            elif has_fee:
+                p_type = 'Fee'
+            elif has_items:
+                p_type = 'Items'
+            else:
+                p_type = 'Unknown'
+            p.payment_type_display = p_type
+
+            payment_list.append({
+                'payment': p,
+                'fee_paid': fee_paid,          # kept if needed elsewhere
+                'total_due_before': total_due_before,
+                'remaining_balance': remaining_balance,
+            })
+
+        # Reverse for descending display (most recent first)
+        payment_list.reverse()
+
+        # Paginate the list
+        paginator = Paginator(payment_list, 10)
+        page_obj = paginator.get_page(page)
+
+        total_paid = student.payments.aggregate(Sum('amount'))['amount__sum'] or 0
+        # fee_paid_total from fee_records
+        fee_paid_total = sum(fr.paid_amount for fr in fee_records)
+        item_purchase_total = total_paid - fee_paid_total
+        pending_total = total_fee - fee_paid_total
+
+        context = {
+            'tenant': tenant,
+            'student': student,
+            'fee_records': fee_records,
+            'payments': page_obj,
+            'total_fee': total_fee,
+            'total_paid': total_paid,
+            'pending_total': pending_total,
+            'item_purchase_total': item_purchase_total,
+            'current_month': current_month,
+            'current_year': current_year,
+            'logo_url': tenant.school_logo.url if tenant.school_logo else None,
+            'search_date': search_date,
+        }
+        return render(request, 'tenant/student_profile.html', context)
 @require_tenant_type(['school'])
 def fee_receipt(request, schema_name, receipt_id):
     tenant = get_tenant(request, schema_name)
