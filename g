@@ -1,54 +1,66 @@
 #!/usr/bin/env python3
 """
-Fix the broken {% url %} tag in student_profile.html.
-Run: python3 fix_url_tag.py
+Fix collect_fee.html template: use server-side total_pending as base,
+not DOM element that may be missing.
 """
 
 import re
-import os
 
-TEMPLATE = "templates/tenant/student_profile.html"
+TEMPLATE_FILE = "templates/tenant/collect_fee.html"
 
-def main():
-    if not os.path.exists(TEMPLATE):
-        print(f"❌ File not found: {TEMPLATE}")
-        return
-
-    with open(TEMPLATE, "r") as f:
+def fix_template():
+    with open(TEMPLATE_FILE, "r") as f:
         content = f.read()
 
-    # The exact broken pattern
-    broken_pattern = r'<a href="{% url \\\'fee_collection\\\' schema_name=tenant\.schema_name student_id=student\.id %}"\s+class="btn-primary">.*?Collect Pending</a>'
+    # Find the <script> block
+    script_start = content.find("<script>")
+    script_end = content.find("</script>", script_start)
+    if script_start == -1 or script_end == -1:
+        print("❌ Could not find <script> block in collect_fee.html")
+        return
 
-    # Replacement with correct syntax and proper SVG
-    correct = '<a href="{% url \'fee_collection\' schema_name=tenant.schema_name student_id=student.id %}" class="btn-primary"><svg class="inline-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M8 10h8"/></svg> Collect Pending</a>'
+    script_content = content[script_start:script_end+9]  # include </script>
 
-    if re.search(broken_pattern, content, re.DOTALL):
-        content = re.sub(broken_pattern, correct, content, flags=re.DOTALL)
-        print("✅ Fixed the {% url %} tag.")
+    # 1. Add basePending constant after the existing constants
+    # We'll find a good insertion point: after "const studentId = {{ student.id }};"
+    insert_after = "const studentId = {{ student.id }};"
+    if insert_after in script_content:
+        # Insert basePending after that line
+        new_script = script_content.replace(
+            insert_after,
+            insert_after + "\nconst basePending = {{ total_pending|floatformat:2 }};"
+        )
     else:
-        # Fallback: look for any href containing the broken pattern
-        alt_pattern = r'href="{% url \\\'fee_collection\\\'.*?"'
-        if re.search(alt_pattern, content):
-            content = re.sub(
-                r'href="{% url \\\'fee_collection\\\' schema_name=tenant\.schema_name student_id=student\.id %}"',
-                'href="{% url \'fee_collection\' schema_name=tenant.schema_name student_id=student.id %}"',
-                content
-            )
-            print("✅ Fixed the href attribute.")
-        else:
-            print("⚠️ Could not find the broken tag. Manual check required.")
-            # Let's try to find any occurrence of 'fee_collection' with escaped quotes
-            if "\\'fee_collection\\'" in content:
-                content = content.replace("\\'fee_collection\\'", "'fee_collection'")
-                print("✅ Replaced escaped quotes with normal quotes.")
-            else:
-                print("ℹ️ No escaped quotes found. The file might already be fixed.")
+        print("⚠️ Could not find insertion point, adding at top of script")
+        new_script = script_content.replace(
+            "<script>",
+            "<script>\nconst basePending = {{ total_pending|floatformat:2 }};"
+        )
 
-    with open(TEMPLATE, "w") as f:
+    # 2. Replace getBasePendingTotal function
+    # We'll replace the entire function definition
+    old_func = r"function getBasePendingTotal\(\) \{\s*const raw = totalPendingSpan \? totalPendingSpan\.innerText : '0';\s*return Number\(raw\) \|\| 0;\s*\}"
+    new_func = "function getBasePendingTotal() { return basePending; }"
+    new_script = re.sub(old_func, new_func, new_script, flags=re.DOTALL)
+
+    # 3. Remove the line that defines totalPendingSpan if it's no longer needed
+    # We can keep it but it's unused; but we can remove to avoid confusion.
+    # We'll comment it out or remove.
+    # We'll find "const totalPendingSpan = document.getElementById('totalPending');" and remove it.
+    # But careful: there might be other uses? In this template, it's only used in getBasePendingTotal.
+    # After replacement, it's not used. We can remove.
+    new_script = re.sub(r"const totalPendingSpan = document\.getElementById\('totalPending'\);\s*", "", new_script)
+
+    # Replace the old script block with the new one
+    content = content[:script_start] + new_script + content[script_end+9:]
+
+    with open(TEMPLATE_FILE, "w") as f:
         f.write(content)
 
-    print("🎯 Done! Restart your server and test the student profile page.")
+    print("✅ Successfully patched collect_fee.html")
+    print("   - Added basePending constant with server-side total_pending")
+    print("   - getBasePendingTotal now returns basePending")
+    print("   - Removed unused totalPendingSpan DOM lookup")
 
 if __name__ == "__main__":
-    main()
+    fix_template()

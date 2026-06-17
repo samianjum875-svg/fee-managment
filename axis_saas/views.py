@@ -35,6 +35,21 @@ def require_tenant_type(allowed_types):
 from .models import SchoolClient, Student, FeeStructure, FeeRecord, PaymentTransaction, SchoolFeeSettings, Product, ProductCategory
 from .forms import StudentForm, FeeCollectionForm, FeeSettingsForm, FeeStructureForm, FamilyPaymentForm
 
+
+def get_overall_pending(student):
+    """Compute overall remaining balance: total fee + total items cost - total paid."""
+    from decimal import Decimal
+    from django.db.models import Sum
+    total_fee = student.fee_records.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+    total_paid = student.payments.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+    # Compute total items cost from all payments
+    total_items_cost = Decimal('0')
+    for p in student.payments.all():
+        items = _extract_item_sales_from_remarks(p.remarks or '')
+        total_items_cost += sum(item['line_total'] for item in items)
+    return total_fee + total_items_cost - total_paid
+
+
 def local_time_str(dt):
     """Convert aware datetime to local timezone and return formatted time string."""
     if not dt:
@@ -58,15 +73,15 @@ def dashboard(request, schema_name):
         first_day_month = today.replace(day=1)
         today_collection = PaymentTransaction.objects.filter(payment_date=today).aggregate(Sum('amount'))['amount__sum'] or 0
         month_collection = PaymentTransaction.objects.filter(payment_date__gte=first_day_month).aggregate(Sum('amount'))['amount__sum'] or 0
-        pending_records = FeeRecord.objects.filter(status__in=['pending', 'partial', 'overdue'])
-        total_pending = sum(r.remaining for r in pending_records)
+        pending_records = FeeRecord.objects.all()
+        total_pending = get_overall_pending(student)
         defaulters_count = Student.objects.filter(fee_records__status__in=['pending', 'partial', 'overdue']).distinct().count()
         total_payments_count = PaymentTransaction.objects.count()
         recent_payments = PaymentTransaction.objects.select_related('student').order_by('-payment_date')[:5]
         recent_payments = list(recent_payments)
         top_defaulters = []
         for student in Student.objects.all():
-            pending = sum(fr.remaining for fr in student.fee_records.filter(status__in=['pending', 'partial', 'overdue']))
+            pending = get_overall_pending(student)
             if pending > 0:
                 top_defaulters.append({'student': student, 'pending': pending})
         top_defaulters = sorted(top_defaulters, key=lambda x: x['pending'], reverse=True)[:5]
@@ -114,7 +129,7 @@ def student_list(request, schema_name):
         students = students.order_by('-enrolled_on')
         # Annotate pending amount
         for s in students:
-            s.pending_amount = sum(fr.remaining for fr in s.fee_records.filter(status__in=['pending', 'partial', 'overdue']))
+            s.pending_amount = get_overall_pending(s)
         # Paginate
         from django.core.paginator import Paginator
         paginator = Paginator(students, 20)
@@ -290,7 +305,7 @@ def defaulters(request, schema_name):
             base_qs = base_qs.filter(fee_records__due_date__lte=cutoff)
         result = []
         for student in base_qs:
-            pending_fee = sum(fr.remaining for fr in student.fee_records.filter(status__in=['pending', 'partial', 'overdue']))
+            pending_fee = get_overall_pending(student)
             oldest_due = student.fee_records.filter(status__in=['pending', 'partial', 'overdue']).order_by('due_date').first()
             days_overdue = (today - oldest_due.due_date).days if oldest_due and oldest_due.due_date < today else 0
             result.append({'student': student, 'pending_amount': pending_fee, 'days_overdue': days_overdue})
@@ -363,8 +378,8 @@ def reports(request, schema_name):
         total_collection = payments_qs.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
         payment_count = payments_qs.count()
 
-        pending_records = FeeRecord.objects.filter(status__in=['pending', 'partial', 'overdue'])
-        total_pending = sum(r.remaining for r in pending_records)
+        pending_records = FeeRecord.objects.all()
+        total_pending = get_overall_pending(student)
 
         total_collection_all = PaymentTransaction.objects.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
         total_billed = total_collection_all + total_pending
@@ -394,14 +409,14 @@ def reports(request, schema_name):
         grades = list(grades)
         for grade in grades:
             students = Student.objects.filter(grade=grade)
-            pending = sum(sum(fr.remaining for fr in s.fee_records.filter(status__in=['pending', 'partial', 'overdue'])) for s in students)
+            pending = sum(get_overall_pending(s) for s in students)
             if pending > 0:
                 class_pending.append({'grade': grade, 'pending': float(pending)})
         class_pending.sort(key=lambda x: x['pending'], reverse=True)
 
         top_defaulters = []
         for student in Student.objects.all():
-            pending = sum(fr.remaining for fr in student.fee_records.filter(status__in=['pending', 'partial', 'overdue']))
+            pending = get_overall_pending(student)
             if pending > 0:
                 top_defaulters.append({'student': student, 'pending': float(pending)})
         top_defaulters = sorted(top_defaulters, key=lambda x: x['pending'], reverse=True)[:5]
@@ -409,7 +424,7 @@ def reports(request, schema_name):
         defaulters_list = Student.objects.filter(fee_records__status__in=['pending', 'partial', 'overdue']).distinct()
         defaulters_data = []
         for student in defaulters_list:
-            pending = sum(fr.remaining for fr in student.fee_records.filter(status__in=['pending', 'partial', 'overdue']))
+            pending = get_overall_pending(student)
             oldest_due = student.fee_records.filter(status__in=['pending', 'partial', 'overdue']).order_by('due_date').first()
             days_overdue = (timezone.localdate() - oldest_due.due_date).days if oldest_due and oldest_due.due_date < timezone.localdate() else 0
             defaulters_data.append({
@@ -486,7 +501,7 @@ def fee_collection(request, schema_name, student_id=None):
                         item_breakdown.append((product, qty, line_total))
 
                     pending_records = student.fee_records.filter(status__in=['pending', 'partial', 'overdue']).order_by('due_date')
-                    total_pending = sum(r.remaining for r in pending_records)
+                    total_pending = get_overall_pending(student)
                     total_due = Decimal(total_pending) + product_total
 
                     amount_received = amount
@@ -564,7 +579,7 @@ def fee_collection(request, schema_name, student_id=None):
             try:
                 student = Student.objects.get(id=student_id)
                 pending_records = student.fee_records.filter(status__in=['pending', 'partial', 'overdue']).order_by('due_date')
-                total_pending = sum(r.remaining for r in pending_records)
+                total_pending = get_overall_pending(student)
                 products = list(Product.objects.select_related('category').filter(quantity__gt=0).order_by('category__name', 'name'))
                 categories = list(ProductCategory.objects.all().order_by('name'))
                 context = {
@@ -600,7 +615,7 @@ def fee_collection(request, schema_name, student_id=None):
 
         pending_students = []
         for s in students_qs:
-            pending = sum(fr.remaining for fr in s.fee_records.filter(status__in=['pending', 'partial', 'overdue']))
+            pending = sum(fr.remaining for fr in s.fee_records.all())
             if pending > 0:
                 s.pending_total = pending
                 pending_students.append(s)
@@ -763,7 +778,7 @@ def family_payment(request, schema_name):
                 all_pending_records = []
                 for s in students:
                     records = s.fee_records.filter(status__in=['pending', 'partial', 'overdue']).order_by('due_date')
-                    total_pending += sum(r.remaining for r in records)
+                    total_pending += get_overall_pending(s)
                     all_pending_records.extend(records)
                 if amount is None:
                     amount = total_pending

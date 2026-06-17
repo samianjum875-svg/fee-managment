@@ -640,7 +640,7 @@ function getCookie(name) {
 const csrfToken = getCookie('csrftoken');
 const schema = '{{ tenant.schema_name }}';
 const studentId = {{ student.id }};
-const totalPendingSpan = document.getElementById('totalPending');
+const basePending = {{ total_pending|floatformat:2 }};
 const amountInput = document.getElementById('amountInput');
 const remainingSpan = document.getElementById('remainingAfter');
 const totalDueSummary = document.getElementById('totalDueSummary');
@@ -655,10 +655,7 @@ const itemCart = {};
 
 function formatMoney(v) { return '₹' + Number(v).toFixed(2); }
 
-function getBasePendingTotal() {
-    const raw = totalPendingSpan ? totalPendingSpan.innerText : '0';
-    return Number(raw) || 0;
-}
+function getBasePendingTotal() { return basePending; }
 
 function updateDueSummary() {
     const pending = getBasePendingTotal();
