@@ -751,62 +751,7 @@ if ('serviceWorker' in navigator) {
 
     <!-- Custom Install Button (PWA) -->
     
-    <script>
-        let deferredPrompt;
-        const installContainer = document.getElementById('pwaInstallContainer');
-        const installBtn = document.getElementById('installAppBtn');
-
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-            installContainer.style.display = 'block';
-        });
-
-        installBtn.addEventListener('click', async () => {
-            if (deferredPrompt) {
-                deferredPrompt.prompt();
-
-
-        // Sidebar install button
-        
-        const sidebarInstallBtn = document.getElementById('installAppSidebarBtn');
-        if (sidebarInstallBtn) {
-            sidebarInstallBtn.addEventListener('click', async () => {
-                if (deferredPrompt) {
-                    deferredPrompt.prompt();
-                    const result = await deferredPrompt.userChoice;
-                    if (result.outcome === 'accepted') {
-                        console.log('User accepted the install prompt (sidebar)');
-                        sidebarInstallBtn.style.display = 'none';
-                    } else {
-                        console.log('User dismissed the install prompt (sidebar)');
-                    }
-                    deferredPrompt = null;
-                } else {
-                    // Show fallback modal with instructions
-                    document.getElementById('installFallbackModal').style.display = 'flex';
-                }
-            });
-        }
-
-        }
-
-                const result = await deferredPrompt.userChoice;
-                if (result.outcome === 'accepted') {
-                    console.log('User accepted the install prompt');
-                    installContainer.style.display = 'none';
-                } else {
-                    console.log('User dismissed the install prompt');
-                }
-                deferredPrompt = null;
-            }
-        });
-
-        window.addEventListener('appinstalled', () => {
-            installContainer.style.display = 'none';
-            console.log('PWA installed successfully');
-        });
-    </script>
+    
     
 
 <!-- Fallback Install Modal (shown if native prompt not available) -->
@@ -855,6 +800,85 @@ if ('serviceWorker' in navigator) {
                 }
             });
         }
+    })();
+</script>
+
+
+    <!-- Floating Install Button (always visible) -->
+    <div id="pwaInstallContainer" style="position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex;">
+        <button id="installAppBtn" style="background: var(--primary); color: white; border: none; border-radius: 2rem; padding: 0.6rem 1.2rem; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.2); cursor: pointer; display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 4v12m-4-4l4 4 4-4"/>
+            </svg>
+            Install App
+        </button>
+    </div>
+
+
+<script>
+    (function() {
+        let deferredPrompt;
+        const floatingBtn = document.getElementById('installAppBtn');
+        const sidebarBtn = document.getElementById('installAppSidebarBtn');
+        const fallbackModal = document.getElementById('installFallbackModal');
+
+        // Listen for beforeinstallprompt
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            console.log('beforeinstallprompt fired');
+        });
+
+        // Function to trigger install or fallback
+        async function triggerInstall() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const result = await deferredPrompt.userChoice;
+                if (result.outcome === 'accepted') {
+                    console.log('User accepted install');
+                    // Hide both buttons after installation
+                    if (floatingBtn) floatingBtn.closest('#pwaInstallContainer').style.display = 'none';
+                    if (sidebarBtn) sidebarBtn.style.display = 'none';
+                } else {
+                    console.log('User dismissed install');
+                }
+                deferredPrompt = null;
+            } else {
+                // No native prompt – show fallback modal
+                if (fallbackModal) fallbackModal.style.display = 'flex';
+            }
+        }
+
+        // Attach to floating button
+        if (floatingBtn) {
+            floatingBtn.addEventListener('click', triggerInstall);
+        }
+
+        // Attach to sidebar button
+        if (sidebarBtn) {
+            sidebarBtn.addEventListener('click', triggerInstall);
+        }
+
+        // Hide buttons once installed (appinstalled event)
+        window.addEventListener('appinstalled', () => {
+            console.log('App installed');
+            if (floatingBtn) floatingBtn.closest('#pwaInstallContainer').style.display = 'none';
+            if (sidebarBtn) sidebarBtn.style.display = 'none';
+        });
+
+        // Also hide fallback modal when close button clicked
+        const closeFallback = document.getElementById('closeFallbackModal');
+        if (closeFallback) {
+            closeFallback.addEventListener('click', () => {
+                if (fallbackModal) fallbackModal.style.display = 'none';
+            });
+        }
+        if (fallbackModal) {
+            fallbackModal.addEventListener('click', (e) => {
+                if (e.target === fallbackModal) fallbackModal.style.display = 'none';
+            });
+        }
+
     })();
 </script>
 

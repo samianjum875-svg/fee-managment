@@ -1,205 +1,196 @@
 #!/usr/bin/env python3
 """
-PWA Patcher for AXIS School System
-- Creates PWA icons (192x192, 512x512) in axis_saas/static/pwa/
-- Modifies base.html to show sidebar install button always + fallback modal
-- Removes floating install button
+Restore floating PWA install button – visible on ALL devices.
+- Adds floating button HTML if missing.
+- Sets it to always visible (except in standalone mode).
+- Click triggers install prompt or fallback modal.
 """
 
-import os
 import re
-import sys
-from pathlib import Path
+import os
 
-# Try to import PIL for icon generation
-try:
-    from PIL import Image, ImageDraw, ImageFont
-except ImportError:
-    print("❌ Pillow not installed. Please install: pip install Pillow")
-    sys.exit(1)
-
-# ---------- CONFIG ----------
 BASE_HTML = "templates/tenant/base.html"
-STATIC_DIR = "axis_saas/static/pwa"
-ICONS = {
-    "icon-192x192.png": (192, 192),
-    "icon-512x512.png": (512, 512),
-}
-
-
-def create_icon(filename, size):
-    """Generate a simple icon with text 'AXIS'."""
-    img = Image.new("RGB", size, color="#3b82f6")
-    draw = ImageDraw.Draw(img)
-    # Try to load a font, fallback to default
-    try:
-        font = ImageFont.truetype("arial.ttf", size // 4)
-    except:
-        font = ImageFont.load_default()
-    text = "AXIS"
-    # Get text bbox
-    bbox = draw.textbbox((0, 0), text, font=font)
-    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    pos = ((size[0] - tw) // 2, (size[1] - th) // 2)
-    draw.text(pos, text, fill="white", font=font)
-    img.save(filename)
-    print(f"✅ Created {filename}")
-
-
-def generate_icons():
-    """Create all icons if they don't exist."""
-    os.makedirs(STATIC_DIR, exist_ok=True)
-    for name, size in ICONS.items():
-        path = os.path.join(STATIC_DIR, name)
-        if not os.path.exists(path):
-            create_icon(path, size)
-        else:
-            print(f"⏩ Icon already exists: {path}")
-
 
 def patch_base_html():
-    """Modify base.html: remove floating button, show sidebar button, add fallback modal."""
     if not os.path.exists(BASE_HTML):
         print(f"❌ {BASE_HTML} not found!")
         return
 
-    with open(BASE_HTML, "r") as f:
+    with open(BASE_HTML, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # ----- 1. Remove floating install container -----
-    # Find and remove the floating container completely
-    floating_pattern = r'<div id="pwaInstallContainer".*?</div>'
-    content = re.sub(floating_pattern, "", content, flags=re.DOTALL)
-    print("✅ Removed floating install button")
-
-    # ----- 2. Make sidebar install button always visible -----
-    # Replace style="display: none;" with style="display: flex;" (or remove inline style)
-    sidebar_btn_pattern = r'(<button id="installAppSidebarBtn".*?)style="display: none;"(.*?>)'
-    # If not found, try to add style if missing
-    if re.search(sidebar_btn_pattern, content):
-        content = re.sub(sidebar_btn_pattern, r'\1style="display: flex;"\2', content)
-        print("✅ Sidebar button set to visible")
+    # ---- 1. Check if floating container already exists ----
+    if 'id="pwaInstallContainer"' in content:
+        print("⏩ Floating container already exists. We'll update its visibility.")
     else:
-        # If style not present, add it
-        sidebar_btn = '<button id="installAppSidebarBtn" class="nav-item" style="display: flex; width: 100%; background: none; border: none; text-align: left; cursor: pointer;">'
-        content = re.sub(r'<button id="installAppSidebarBtn".*?>', sidebar_btn, content)
-        print("✅ Sidebar button style added")
-
-    # ----- 3. Add fallback modal HTML (right before the floating container's old position or at end of body) -----
-    fallback_modal = '''
-<!-- Fallback Install Modal (shown if native prompt not available) -->
-<div id="installFallbackModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
-    <div style="background: var(--surface); border-radius: 1rem; padding: 1.5rem; max-width: 400px; width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
-        <h3 style="margin-top:0;">Install App</h3>
-        <p>To install this app on your device:</p>
-        <ul style="padding-left:1.5rem; margin:0.5rem 0;">
-            <li><strong>Chrome / Edge:</strong> Click the <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 4v12m-4-4l4 4 4-4"/></svg> icon in the address bar.</li>
-            <li><strong>Firefox:</strong> Tap the menu (☰) → "Add to Home screen".</li>
-            <li><strong>Safari (iOS):</strong> Tap the share button → "Add to Home Screen".</li>
-        </ul>
-        <button id="closeFallbackModal" style="background: var(--primary); color: white; border: none; border-radius: 2rem; padding: 0.5rem 1.2rem; font-weight: 600; cursor: pointer; margin-top: 0.5rem;">Got it</button>
+        # Insert floating container before </body> or before fallback modal
+        floating_html = '''
+    <!-- Floating Install Button (always visible) -->
+    <div id="pwaInstallContainer" style="position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex;">
+        <button id="installAppBtn" style="background: var(--primary); color: white; border: none; border-radius: 2rem; padding: 0.6rem 1.2rem; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.2); cursor: pointer; display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 4v12m-4-4l4 4 4-4"/>
+            </svg>
+            Install App
+        </button>
     </div>
-</div>
-<script>
-    document.getElementById('closeFallbackModal')?.addEventListener('click', function() {
-        document.getElementById('installFallbackModal').style.display = 'none';
-    });
-    // Close on overlay click
-    document.getElementById('installFallbackModal')?.addEventListener('click', function(e) {
-        if (e.target === this) this.style.display = 'none';
-    });
-</script>
 '''
-    # Insert before </body> or at the end
-    if '</body>' in content:
-        content = content.replace('</body>', fallback_modal + '\n</body>')
-        print("✅ Fallback modal added")
-    else:
-        # fallback: append to end
-        content += fallback_modal
-        print("✅ Fallback modal appended (no </body> found)")
+        # Insert before </body>
+        if '</body>' in content:
+            content = content.replace('</body>', floating_html + '\n</body>')
+        else:
+            content += floating_html
+        print("✅ Floating button HTML added.")
 
-    # ----- 4. Update JavaScript to handle fallback -----
-    # Find the install button click handler and modify
-    # We'll add a check: if deferredPrompt exists, use it; else show fallback modal.
-    # We'll also ensure the sidebar button click event is attached.
-    # Since we have existing script, we can replace the sidebar button click handler with improved version.
-    # Search for the block that attaches click listener to installAppSidebarBtn and replace with new code.
-    old_sidebar_handler = r'''const sidebarInstallBtn = document\.getElementById\('installAppSidebarBtn'\);\s*if \(sidebarInstallBtn\) \{\s*sidebarInstallBtn\.addEventListener\('click', async \(\) => \{.*?\}\s*\}\);'''
-    new_sidebar_handler = '''
-        const sidebarInstallBtn = document.getElementById('installAppSidebarBtn');
-        if (sidebarInstallBtn) {
-            sidebarInstallBtn.addEventListener('click', async () => {
-                if (deferredPrompt) {
-                    deferredPrompt.prompt();
-                    const result = await deferredPrompt.userChoice;
-                    if (result.outcome === 'accepted') {
-                        console.log('User accepted the install prompt (sidebar)');
-                        sidebarInstallBtn.style.display = 'none';
-                    } else {
-                        console.log('User dismissed the install prompt (sidebar)');
-                    }
-                    deferredPrompt = null;
-                } else {
-                    // Show fallback modal with instructions
-                    document.getElementById('installFallbackModal').style.display = 'flex';
-                }
-            });
-        }
+    # ---- 2. Ensure CSS hides it in standalone mode ----
+    # Look for existing @media all and (display-mode: standalone) rule that hides #pwaInstallContainer
+    # If not present, add it inside <style> block
+    if '@media all and (display-mode: standalone)' not in content:
+        # Find </style> and insert before it
+        css_rule = '''
+    /* Hide floating button when app is installed (standalone mode) */
+    @media all and (display-mode: standalone) {
+        #pwaInstallContainer { display: none !important; }
+    }
 '''
-    # Use regex to replace the block (non-greedy)
-    content = re.sub(old_sidebar_handler, new_sidebar_handler, content, flags=re.DOTALL)
-    if old_sidebar_handler not in content:
-        # If pattern not found, just append the new handler after the existing script (but we can also add it unconditionally)
-        # Let's just add a new script block that ensures the handler is attached.
-        extra_js = '''
+        content = content.replace('</style>', css_rule + '\n    </style>')
+        print("✅ Added CSS to hide floating button in standalone mode.")
+    else:
+        # Ensure the rule includes #pwaInstallContainer
+        if '#pwaInstallContainer' not in content:
+            # Insert the rule inside the existing media query
+            # Find the media query block and insert
+            pattern = r'(@media all and \(display-mode: standalone\)\s*\{)([^}]*)\}'
+            def replacer(match):
+                prefix = match.group(1)
+                inside = match.group(2)
+                if '#pwaInstallContainer' not in inside:
+                    inside += '\n        #pwaInstallContainer { display: none !important; }\n    '
+                return prefix + inside + '}'
+            content = re.sub(pattern, replacer, content, flags=re.DOTALL)
+            print("✅ Updated existing standalone CSS to hide floating button.")
+        else:
+            print("⏩ Standalone CSS already covers floating button.")
+
+    # ---- 3. Update JavaScript for floating button ----
+    # We need to ensure the floating button's click handler works with deferredPrompt or fallback.
+    # The existing script already has a handler for installAppBtn, but it's incomplete (the code is messy).
+    # We'll replace the whole install-related script with a clean version.
+
+    # Find the script block that handles install. We'll replace it entirely.
+    # We'll look for the pattern that defines deferredPrompt and the event listeners.
+    # Safer: remove the old install script and add a new one before </body>.
+
+    # We'll use a marker to identify the old script block. Since we have the fallback modal already,
+    # we can place the new script after the fallback modal.
+
+    # Remove any existing script that handles install (we'll add new one)
+    # We'll find the part from "let deferredPrompt;" to the end of that script block.
+    # Use regex to remove it, but careful: there may be multiple script tags.
+    # Simpler: we'll just add a new script that overrides the handler and remove the old one.
+
+    # We'll insert a new script block after the fallback modal that sets up everything cleanly.
+    new_js = '''
 <script>
-    // Ensure sidebar install button works with fallback
     (function() {
+        let deferredPrompt;
+        const floatingBtn = document.getElementById('installAppBtn');
         const sidebarBtn = document.getElementById('installAppSidebarBtn');
-        if (sidebarBtn) {
-            // Remove any existing listeners to avoid duplicates
-            sidebarBtn.replaceWith(sidebarBtn.cloneNode(true));
-            const newBtn = document.getElementById('installAppSidebarBtn');
-            newBtn.addEventListener('click', async () => {
-                if (typeof deferredPrompt !== 'undefined' && deferredPrompt) {
-                    deferredPrompt.prompt();
-                    const result = await deferredPrompt.userChoice;
-                    if (result.outcome === 'accepted') {
-                        console.log('Accepted');
-                        newBtn.style.display = 'none';
-                    }
-                    deferredPrompt = null;
+        const fallbackModal = document.getElementById('installFallbackModal');
+
+        // Listen for beforeinstallprompt
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            console.log('beforeinstallprompt fired');
+        });
+
+        // Function to trigger install or fallback
+        async function triggerInstall() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const result = await deferredPrompt.userChoice;
+                if (result.outcome === 'accepted') {
+                    console.log('User accepted install');
+                    // Hide both buttons after installation
+                    if (floatingBtn) floatingBtn.closest('#pwaInstallContainer').style.display = 'none';
+                    if (sidebarBtn) sidebarBtn.style.display = 'none';
                 } else {
-                    document.getElementById('installFallbackModal').style.display = 'flex';
+                    console.log('User dismissed install');
                 }
+                deferredPrompt = null;
+            } else {
+                // No native prompt – show fallback modal
+                if (fallbackModal) fallbackModal.style.display = 'flex';
+            }
+        }
+
+        // Attach to floating button
+        if (floatingBtn) {
+            floatingBtn.addEventListener('click', triggerInstall);
+        }
+
+        // Attach to sidebar button
+        if (sidebarBtn) {
+            sidebarBtn.addEventListener('click', triggerInstall);
+        }
+
+        // Hide buttons once installed (appinstalled event)
+        window.addEventListener('appinstalled', () => {
+            console.log('App installed');
+            if (floatingBtn) floatingBtn.closest('#pwaInstallContainer').style.display = 'none';
+            if (sidebarBtn) sidebarBtn.style.display = 'none';
+        });
+
+        // Also hide fallback modal when close button clicked
+        const closeFallback = document.getElementById('closeFallbackModal');
+        if (closeFallback) {
+            closeFallback.addEventListener('click', () => {
+                if (fallbackModal) fallbackModal.style.display = 'none';
             });
         }
+        if (fallbackModal) {
+            fallbackModal.addEventListener('click', (e) => {
+                if (e.target === fallbackModal) fallbackModal.style.display = 'none';
+            });
+        }
+
     })();
 </script>
 '''
-        # Insert before </body>
-        content = content.replace('</body>', extra_js + '\n</body>')
-        print("✅ Added extra JS to handle fallback")
-    else:
-        print("✅ Updated sidebar install click handler")
+    # Remove old install-related scripts. We'll locate the pattern that starts with "let deferredPrompt;" and ends before the next script or before the fallback modal.
+    # But easier: we can just remove the entire script block that contains "deferredPrompt" and replace with new.
 
-    # ----- 5. Ensure the existing CSS hides the button in standalone mode (already present) -----
-    # We already have: @media all and (display-mode: standalone) { #installAppSidebarBtn { display: none !important; } }
-    # That's fine.
+    # Find the first script that defines deferredPrompt (could be multiple). We'll use regex to remove it.
+    pattern = r'<script>\s*let\s+deferredPrompt;.*?</script>'
+    # Use DOTALL to match across lines
+    content = re.sub(pattern, '', content, flags=re.DOTALL)
+
+    # Also remove any inline script that sets installContainer.style.display etc.
+    # But we can just let the new script handle everything.
+
+    # Insert new script before </body> (but after fallback modal if present)
+    if '</body>' in content:
+        content = content.replace('</body>', new_js + '\n</body>')
+    else:
+        content += new_js
+    print("✅ Replaced install script with clean version.")
+
+    # ---- 4. Ensure floating button is initially visible ----
+    # In case there is an inline style display:none on the container, remove it.
+    # We already set style="display: flex;" in the added HTML.
+    # But if it existed before, we might need to force it.
+    # Use regex to replace any display:none on #pwaInstallContainer with display:flex.
+    content = re.sub(r'(id="pwaInstallContainer"[^>]*style="[^"]*)display\s*:\s*none\s*;?', r'\1display: flex;', content)
 
     # Write back
-    with open(BASE_HTML, "w") as f:
+    with open(BASE_HTML, "w", encoding="utf-8") as f:
         f.write(content)
 
     print("✅ base.html patched successfully.")
-
+    print("\n🎯 Floating install button is now visible on mobile AND desktop.")
+    print("   Clicking it will try native install, or show fallback instructions.")
+    print("   Restart server to see changes: python manage.py runserver")
 
 if __name__ == "__main__":
-    print("🚀 AXIS PWA Patcher starting...")
-    generate_icons()
     patch_base_html()
-    print("\n🎯 Done! Now run:")
-    print("   python manage.py collectstatic")
-    print("   python manage.py runserver")
-    print("\nThen visit your site on mobile and laptop – the install button will appear in the sidebar (unless already installed).")
