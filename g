@@ -1,329 +1,205 @@
 #!/usr/bin/env python3
 """
-Stock Management & Product Detail Patcher
-- Adds K/M/B number formatting to stock management KPIs.
-- Replaces product detail page with a modern, professional design.
-Usage: python3 patch_stock_display.py
+AXIS PWA Patcher – Fixes installability and adds a floating install button.
+Run this script once from the project root (where manage.py is).
 """
 
 import os
-import re
+import sys
+import shutil
+from pathlib import Path
 
-# ----------------------------
-# 1. Patch stock_management.html
-# ----------------------------
-STOCK_TEMPLATE = "templates/tenant/stock_management.html"
+# ----------------------------------------------------------------------
+# 1. Generate PWA icons using Pillow
+# ----------------------------------------------------------------------
+try:
+    from PIL import Image, ImageDraw, ImageFont
+except ImportError:
+    print("❌ Pillow not installed. Installing...")
+    os.system(f"{sys.executable} -m pip install Pillow")
+    from PIL import Image, ImageDraw, ImageFont
 
-with open(STOCK_TEMPLATE, "r") as f:
-    stock_content = f.read()
+PROJECT_ROOT = Path(os.getcwd())
+STATIC_PWA_DIR = PROJECT_ROOT / "axis_saas" / "static" / "pwa"
 
-# Add load fee_extras if missing
-if "{% load fee_extras %}" not in stock_content:
-    # Insert after {% extends 'tenant/base.html' %}
-    stock_content = stock_content.replace(
-        "{% extends 'tenant/base.html' %}",
-        "{% extends 'tenant/base.html' %}\n{% load fee_extras %}"
+def ensure_dir(path):
+    path.mkdir(parents=True, exist_ok=True)
+
+def create_icon(size, output_path, text="AXIS"):
+    """Generate a simple icon with a gradient background and text."""
+    img = Image.new('RGB', (size, size), color=(59, 130, 246))
+    draw = ImageDraw.Draw(img)
+
+    # Draw a slightly rounded rectangle overlay
+    rect_margin = size // 8
+    draw.rectangle(
+        [rect_margin, rect_margin, size - rect_margin, size - rect_margin],
+        fill=(37, 99, 235),
+        outline=None
     )
-    print("✅ Added {% load fee_extras %} to stock_management.html")
 
-# Replace KPI values with humanize filter
-replacements = {
-    r'<div class="kpi-value">{{ analytics\.total_products }}</div>': '<div class="kpi-value">{{ analytics.total_products|humanize_number }}</div>',
-    r'<div class="kpi-value">{{ analytics\.total_categories }}</div>': '<div class="kpi-value">{{ analytics.total_categories|humanize_number }}</div>',
-    r'<div class="kpi-value">₹{{ analytics\.total_stock_value\|floatformat:2 }}</div>': '<div class="kpi-value">₹{{ analytics.total_stock_value|humanize_number }}</div>',
-    r'<div class="kpi-value">{{ analytics\.low_stock_count }}</div>': '<div class="kpi-value">{{ analytics.low_stock_count|humanize_number }}</div>',
-    r'<div class="kpi-value">{{ analytics\.total_units_sold }}</div>': '<div class="kpi-value">{{ analytics.total_units_sold|humanize_number }}</div>',
-    r'<div class="kpi-value">₹{{ analytics\.total_sales_value\|floatformat:2 }}</div>': '<div class="kpi-value">₹{{ analytics.total_sales_value|humanize_number }}</div>',
-}
+    # Add text
+    try:
+        # Try to use a default font
+        font_size = size // 3
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
+    except:
+        font = ImageFont.load_default()
 
-for pattern, replacement in replacements.items():
-    stock_content = re.sub(pattern, replacement, stock_content)
+    bbox = draw.textbbox((0, 0), text, font=font)
+    text_width = bbox[2] - bbox[0]
+    text_height = bbox[3] - bbox[1]
+    x = (size - text_width) // 2
+    y = (size - text_height) // 2
+    draw.text((x, y), text, fill="white", font=font)
 
-with open(STOCK_TEMPLATE, "w") as f:
-    f.write(stock_content)
-print("✅ Applied K/M/B formatting to stock management KPIs")
+    img.save(output_path)
+    print(f"✅ Created icon: {output_path}")
 
+# Create icons
+ensure_dir(STATIC_PWA_DIR)
+create_icon(192, STATIC_PWA_DIR / "icon-192x192.png")
+create_icon(512, STATIC_PWA_DIR / "icon-512x512.png")
 
-# ----------------------------
-# 2. Replace product_detail.html
-# ----------------------------
-PRODUCT_DETAIL_TEMPLATE = "templates/tenant/product_detail.html"
+# ----------------------------------------------------------------------
+# 2. Update pwa_views.py – new service worker with proper caching
+# ----------------------------------------------------------------------
+PWA_VIEWS_PATH = PROJECT_ROOT / "axis_saas" / "pwa_views.py"
 
-NEW_PRODUCT_DETAIL = """{% extends 'tenant/base.html' %}
-{% load fee_extras %}
-{% block title %}{{ product.name }} | Stock Details{% endblock %}
+if not PWA_VIEWS_PATH.exists():
+    print(f"❌ {PWA_VIEWS_PATH} not found. Ensure the script is run from the project root.")
+    sys.exit(1)
 
-{% block body %}
-<div class="page-header">
-    <div>
-        <h1 class="page-title">{{ product.name }}</h1>
-        <p class="page-desc">SKU: {{ product.sku }} • Category: {{ product.category.name }}</p>
-    </div>
-    <div class="header-actions">
-        <a href="{% url 'stock_management' schema_name=tenant.schema_name %}" class="btn-secondary">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 18l-6-6 6-6"/></svg>
-            Back to Stock
-        </a>
-    </div>
-</div>
+with open(PWA_VIEWS_PATH, "r") as f:
+    content = f.read()
 
-<!-- Summary Grid -->
-<div class="summary-grid">
-    <div class="summary-card"><span class="summary-label">Current Stock</span><strong class="summary-value">{{ product.quantity|humanize_number }}</strong></div>
-    <div class="summary-card"><span class="summary-label">Unit Price</span><strong class="summary-value">₹{{ product.selling_price|floatformat:2 }}</strong></div>
-    <div class="summary-card"><span class="summary-label">Stock Value</span><strong class="summary-value">₹{{ analytics.stock_value|humanize_number }}</strong></div>
-    <div class="summary-card"><span class="summary-label">Units Sold</span><strong class="summary-value">{{ analytics.total_units_sold|humanize_number }}</strong></div>
-    <div class="summary-card"><span class="summary-label">Sales Value</span><strong class="summary-value">₹{{ analytics.total_sales_value|humanize_number }}</strong></div>
-    <div class="summary-card"><span class="summary-label">Avg. Sale</span><strong class="summary-value">₹{{ analytics.average_sale_value|floatformat:2 }}</strong></div>
-    <div class="summary-card"><span class="summary-label">Last Sale</span><strong class="summary-value">{% if analytics.last_sale_date %}{{ analytics.last_sale_date|date:"d M Y" }}{% else %}—{% endif %}</strong></div>
-    <div class="summary-card"><span class="summary-label">Status</span><strong class="summary-value {% if analytics.low_stock %}status-low{% else %}status-healthy{% endif %}">{% if analytics.low_stock %}Low Stock{% else %}Healthy{% endif %}</strong></div>
-</div>
+# Replace the service_worker function content with a robust one
+new_sw = '''def service_worker(request):
+    """Service Worker for AXIS PWA – modern caching strategy."""
+    sw_js = """// AXIS PWA Service Worker
+const CACHE_NAME = 'axis-pwa-v2';
+const STATIC_EXTENSIONS = ['css', 'js', 'png', 'jpg', 'svg', 'ico', 'json', 'woff2'];
+const STATIC_URLS = [
+    '/static/pwa/icon-192x192.png',
+    '/static/pwa/icon-512x512.png',
+    '/static/css/base.css',   // adjust if you have a main CSS file
+];
 
-<!-- Details & Sales History -->
-<div class="detail-grid">
-    <!-- Product Notes & Buyers -->
-    <div class="detail-card">
-        <div class="card-header">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-            <h3>Product Notes</h3>
-        </div>
-        <div class="card-body">
-            {{ product.notes|default:"No notes added." }}
-        </div>
-    </div>
+// Install: cache essential static files
+self.addEventListener('install', event => {
+    event.waitUntil(
+        caches.open(CACHE_NAME)
+            .then(cache => {
+                return cache.addAll(STATIC_URLS)
+                    .catch(err => console.warn('Could not cache static URLs:', err));
+            })
+            .then(() => self.skipWaiting())
+    );
+});
 
-    <div class="detail-card">
-        <div class="card-header">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
-            <h3>Recent Buyers</h3>
-        </div>
-        <div class="card-body">
-            {% if recent_buyers %}
-                <ul class="buyer-list">
-                    {% for buyer in recent_buyers %}
-                        <li><a href="{% url 'student_profile' schema_name=tenant.schema_name student_id=buyer.id %}#payment-history" style="color: var(--primary); text-decoration: none;">{{ buyer.name }}</a></li>
-                    {% endfor %}
-                </ul>
-            {% else %}
-                <p class="empty-text">No buyers yet.</p>
-            {% endif %}
-        </div>
-    </div>
-</div>
+// Activate: claim clients and clean old caches
+self.addEventListener('activate', event => {
+    event.waitUntil(
+        caches.keys().then(keys => {
+            return Promise.all(
+                keys.filter(key => key !== CACHE_NAME)
+                    .map(key => caches.delete(key))
+            );
+        }).then(() => self.clients.claim())
+    );
+});
 
-<!-- Sales History Table -->
-<div class="table-card">
-    <div class="table-header">
-        <h3>Sales History</h3>
-        <span class="badge">{{ sales_events|length }} transactions</span>
-    </div>
-    <div class="table-responsive">
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Student</th>
-                    <th>Quantity</th>
-                    <th>Amount (₹)</th>
-                    <th>Receipt</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for event in sales_events %}
-                <tr>
-                    <td>{{ event.payment.payment_date|date:"d M Y" }}</td>
-                    <td><a href="{% url 'student_profile' schema_name=tenant.schema_name student_id=event.student.id %}#payment-history" style="color: var(--primary); text-decoration: none; font-weight: 600;">{{ event.student.name }}</a></td>
-                    <td>{{ event.item.quantity }}</td>
-                    <td>₹{{ event.item.line_total|floatformat:2 }}</td>
-                    <td><a href="/portal/{{ tenant.schema_name }}/fee/receipt/{{ event.payment.id }}/" class="receipt-link" target="_blank">{{ event.payment.receipt_number }}</a></td>
-                </tr>
-                {% empty %}
-                <tr><td colspan="5" class="empty-row">No sales recorded for this product yet.</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
-
-<!-- Product Actions (optional) -->
-<div class="action-row">
-    <a href="{% url 'stock_management' schema_name=tenant.schema_name %}" class="btn-secondary">← Back to Stock</a>
-</div>
-
-<style>
-    /* Summary Grid */
-    .summary-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-        gap: 1rem;
-        margin-bottom: 1.5rem;
+// Fetch: cache-first for static files, network-first for everything else
+self.addEventListener('fetch', event => {
+    const url = new URL(event.request.url);
+    const isStatic = STATIC_EXTENSIONS.some(ext => url.pathname.endsWith('.' + ext));
+    if (isStatic || url.pathname.startsWith('/static/')) {
+        event.respondWith(
+            caches.match(event.request)
+                .then(response => response || fetch(event.request))
+                .catch(() => {
+                    // Offline fallback for static files
+                    return new Response('Offline', { status: 503 });
+                })
+        );
+    } else {
+        // For other requests (HTML, API), try network first, fallback to cache
+        event.respondWith(
+            fetch(event.request)
+                .then(response => {
+                    // Cache a copy for offline use
+                    const clone = response.clone();
+                    caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+                    return response;
+                })
+                .catch(() => caches.match(event.request))
+        );
     }
-    .summary-card {
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: var(--radius);
-        padding: 1rem;
-        text-align: center;
-        transition: transform 0.2s;
-    }
-    .summary-card:hover {
-        transform: translateY(-2px);
-    }
-    .summary-label {
-        display: block;
-        font-size: 0.7rem;
-        text-transform: uppercase;
-        color: var(--muted);
-        letter-spacing: 0.5px;
-        margin-bottom: 0.25rem;
-    }
-    .summary-value {
-        font-size: 1.25rem;
-        font-weight: 700;
-        color: var(--text);
-    }
-    .status-low { color: var(--danger); }
-    .status-healthy { color: #10b981; }
-
-    /* Detail Grid */
-    .detail-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-        gap: 1.5rem;
-        margin-bottom: 1.5rem;
-    }
-    .detail-card {
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: var(--radius);
-        overflow: hidden;
-    }
-    .card-header {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        padding: 0.75rem 1rem;
-        background: var(--surface-alt);
-        border-bottom: 1px solid var(--border);
-    }
-    .card-header h3 {
-        margin: 0;
-        font-size: 1rem;
-        font-weight: 600;
-    }
-    .card-body {
-        padding: 1rem;
-        line-height: 1.5;
-        color: var(--text);
-    }
-    .buyer-list {
-        margin: 0;
-        padding-left: 1.2rem;
-    }
-    .buyer-list li {
-        margin-bottom: 0.3rem;
-    }
-    .empty-text {
-        color: var(--muted);
-        font-size: 0.9rem;
-    }
-
-    /* Table Card */
-    .table-card {
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: var(--radius);
-        overflow: hidden;
-        margin-bottom: 1.5rem;
-    }
-    .table-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 0.75rem 1rem;
-        background: var(--surface-alt);
-        border-bottom: 1px solid var(--border);
-    }
-    .table-header h3 {
-        margin: 0;
-        font-size: 1rem;
-        font-weight: 600;
-    }
-    .badge {
-        background: var(--primary);
-        color: white;
-        padding: 0.2rem 0.6rem;
-        border-radius: 2rem;
-        font-size: 0.75rem;
-        font-weight: 500;
-    }
-    .table-responsive {
-        overflow-x: auto;
-    }
-    .data-table {
-        width: 100%;
-        border-collapse: collapse;
-    }
-    .data-table th, .data-table td {
-        padding: 0.75rem 1rem;
-        text-align: left;
-        border-bottom: 1px solid var(--border);
-        font-size: 0.85rem;
-    }
-    .data-table th {
-        background: var(--surface-alt);
-        font-weight: 600;
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        color: var(--muted);
-    }
-    .receipt-link {
-        color: var(--primary);
-        text-decoration: none;
-        font-family: monospace;
-    }
-    .empty-row {
-        text-align: center;
-        color: var(--muted);
-        padding: 2rem;
-    }
-
-    .action-row {
-        text-align: right;
-    }
-    .btn-secondary {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 0.5rem 1rem;
-        border-radius: 2rem;
-        background: var(--surface-alt);
-        color: var(--text);
-        border: 1px solid var(--border);
-        text-decoration: none;
-        font-weight: 500;
-        transition: 0.2s;
-    }
-    .btn-secondary:hover {
-        background: var(--surface);
-    }
-
-    /* Responsive */
-    @media (max-width: 768px) {
-        .summary-grid {
-            grid-template-columns: repeat(2, 1fr);
-        }
-        .detail-grid {
-            grid-template-columns: 1fr;
-        }
-    }
-</style>
-{% endblock %}
+});
 """
+    return HttpResponse(sw_js, content_type='application/javascript')
+'''
 
-with open(PRODUCT_DETAIL_TEMPLATE, "w") as f:
-    f.write(NEW_PRODUCT_DETAIL)
-print("✅ Replaced product_detail.html with modern design")
+# Find the old service_worker function and replace it
+import re
+pattern = r'def service_worker\(request\):.*?(?=def |$)'
+if re.search(pattern, content, re.DOTALL):
+    content = re.sub(pattern, new_sw, content, flags=re.DOTALL)
+    print("✅ Updated pwa_views.py with new service worker.")
+else:
+    print("❌ Could not find service_worker function in pwa_views.py")
+    sys.exit(1)
 
-print("\n🎉 All changes applied successfully!")
-print("Restart your server: python manage.py runserver")
+with open(PWA_VIEWS_PATH, "w") as f:
+    f.write(content)
+
+# ----------------------------------------------------------------------
+# 3. Ensure manifest in pwa_views.py points to the correct icons
+# ----------------------------------------------------------------------
+# The manifest already uses /static/pwa/icon-192x192.png, which is fine.
+# No changes needed.
+
+# ----------------------------------------------------------------------
+# 4. Update base.html to hide install button when already installed
+# ----------------------------------------------------------------------
+BASE_HTML = PROJECT_ROOT / "templates" / "tenant" / "base.html"
+
+if BASE_HTML.exists():
+    with open(BASE_HTML, "r") as f:
+        base_content = f.read()
+
+    # Add a style to hide the install button when in standalone mode
+    hide_style = """
+    @media all and (display-mode: standalone) {
+        #pwaInstallContainer { display: none !important; }
+    }
+    """
+    if "display-mode: standalone" not in base_content:
+        # Insert before </head> or into style section
+        if "</style>" in base_content:
+            base_content = base_content.replace("</style>", hide_style + "</style>")
+        else:
+            # Fallback: add a style block at the end of head
+            base_content = base_content.replace("</head>", f"<style>{hide_style}</style></head>")
+        with open(BASE_HTML, "w") as f:
+            f.write(base_content)
+        print("✅ Updated base.html: install button hidden in standalone mode.")
+    else:
+        print("ℹ️  base.html already has standalone-mode hiding.")
+
+# ----------------------------------------------------------------------
+# 5. Instructions
+# ----------------------------------------------------------------------
+print("\n" + "="*60)
+print("✅ PWA PATCH COMPLETE!")
+print("="*60)
+print("\nNext steps:")
+print("1. Run `python manage.py collectstatic --noinput` to copy the new icons to STATIC_ROOT.")
+print("2. Restart your Django server.")
+print("3. Visit your tenant portal (e.g., /portal/your-school/).")
+print("4. The floating install button (bottom-right) should appear.")
+print("5. Click it to add the app to your home screen.")
+print("\nIf the button doesn't appear, ensure:")
+print("   - Your browser supports PWA (Chrome, Edge, Samsung Internet, etc.)")
+print("   - You are using HTTPS or localhost.")
+print("   - The service worker registers successfully (check DevTools -> Application -> Service Workers).")

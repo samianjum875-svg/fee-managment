@@ -387,6 +387,10 @@
             font-size: 0.7rem;
             font-weight: 600;
         }
+    
+    @media all and (display-mode: standalone) {
+        #pwaInstallContainer { display: none !important; }
+    }
     </style>
     {% block extra_head %}{% endblock %}
 
@@ -422,7 +426,14 @@
         .tenant-gym .tab.active {
             background: var(--primary);
         }
+    
+    @media all and (display-mode: standalone) {
+        #pwaInstallContainer { display: none !important; }
+    }
     </style>
+    <link rel="manifest" href="/portal/{{ tenant.schema_name }}/manifest.json">
+    <meta name="theme-color" content="#3b82f6">
+    <meta name="apple-mobile-web-app-capable" content="yes">
 </head>
 <body class="tenant-{{ tenant.tenant_type }}">
     <div class="app">
@@ -711,5 +722,51 @@
             });
         })();
     </script>
+    <script>
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js')
+        .then(reg => console.log('Service Worker registered'))
+        .catch(err => console.log('Service Worker registration failed:', err));
+}
+</script>
+
+    <!-- Custom Install Button (PWA) -->
+    <div id="pwaInstallContainer" style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: none;">
+        <button id="installAppBtn" style="background: var(--primary); color: white; border: none; border-radius: 2rem; padding: 0.6rem 1.2rem; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.2); cursor: pointer; display: flex; align-items: center; gap: 0.5rem;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 4v12m-4-4l4 4 4-4"/></svg>
+            Install App
+        </button>
+    </div>
+    <script>
+        let deferredPrompt;
+        const installContainer = document.getElementById('pwaInstallContainer');
+        const installBtn = document.getElementById('installAppBtn');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            installContainer.style.display = 'block';
+        });
+
+        installBtn.addEventListener('click', async () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const result = await deferredPrompt.userChoice;
+                if (result.outcome === 'accepted') {
+                    console.log('User accepted the install prompt');
+                    installContainer.style.display = 'none';
+                } else {
+                    console.log('User dismissed the install prompt');
+                }
+                deferredPrompt = null;
+            }
+        });
+
+        window.addEventListener('appinstalled', () => {
+            installContainer.style.display = 'none';
+            console.log('PWA installed successfully');
+        });
+    </script>
+    
 </body>
 </html>
