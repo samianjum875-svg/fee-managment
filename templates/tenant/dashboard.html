@@ -1,90 +1,432 @@
 {% extends 'tenant/base.html' %}
-{% load fee_extras %}
+{% load static %}
 {% block title %}Dashboard | {{ tenant.name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* ---- Dashboard specific styles ---- */
+    .dashboard-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+    .dashboard-header .title-group h1 {
+        font-size: 1.8rem;
+        font-weight: 700;
+        background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        margin: 0;
+    }
+    .dashboard-header .title-group p {
+        color: var(--muted);
+        margin: 0.2rem 0 0;
+    }
+    .dashboard-header .school-logo {
+        height: 60px;
+        border-radius: 0.75rem;
+        border: 1px solid var(--border);
+        padding: 0.25rem;
+        background: var(--surface);
+    }
+
+    /* Quick Actions */
+    .quick-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin-bottom: 1.5rem;
+    }
+    .action-card {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1.2rem;
+        background: var(--surface);
+        border-radius: 2rem;
+        border: 1px solid var(--border);
+        text-decoration: none;
+        color: var(--text);
+        font-weight: 500;
+        font-size: 0.85rem;
+        transition: all 0.2s;
+        box-shadow: var(--shadow-sm);
+    }
+    .action-card:hover {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
+        transform: translateY(-2px);
+        box-shadow: var(--shadow);
+    }
+    .action-card svg {
+        transition: stroke 0.2s;
+    }
+    .action-card:hover svg {
+        stroke: white;
+    }
+
+    /* KPI Grid */
+    .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    .kpi-card {
+        background: var(--surface);
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        padding: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        transition: all 0.2s;
+        box-shadow: var(--shadow-sm);
+        text-decoration: none;
+        color: var(--text);
+        cursor: pointer;
+    }
+    .kpi-card:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow);
+        border-color: var(--primary);
+    }
+    .kpi-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        color: white;
+        font-size: 1.4rem;
+    }
+    .kpi-icon.blue { background: #3b82f6; }
+    .kpi-icon.green { background: #10b981; }
+    .kpi-icon.orange { background: #f59e0b; }
+    .kpi-icon.red { background: #ef4444; }
+    .kpi-icon.purple { background: #8b5cf6; }
+    .kpi-icon.teal { background: #14b8a6; }
+
+    .kpi-info {
+        flex: 1;
+        min-width: 0;
+    }
+    .kpi-label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        color: var(--muted);
+        letter-spacing: 0.5px;
+        font-weight: 600;
+    }
+    .kpi-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        line-height: 1.2;
+        color: var(--text);
+    }
+    .kpi-sub {
+        font-size: 0.65rem;
+        color: var(--muted);
+        margin-top: 0.1rem;
+    }
+
+    /* Two Column Layout */
+    .dashboard-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    .card {
+        background: var(--surface);
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+    }
+    .card-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1rem;
+        background: var(--surface-alt);
+        border-bottom: 1px solid var(--border);
+    }
+    .card-header h3 {
+        flex: 1;
+        font-size: 1rem;
+        font-weight: 600;
+        margin: 0;
+    }
+    .view-link {
+        font-size: 0.8rem;
+        color: var(--primary);
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+    .view-link:hover {
+        text-decoration: underline;
+    }
+    .table-responsive {
+        overflow-x: auto;
+    }
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .data-table th, .data-table td {
+        padding: 0.65rem 0.75rem;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+        font-size: 0.85rem;
+    }
+    .data-table th {
+        background: var(--surface-alt);
+        font-weight: 600;
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        color: var(--muted);
+    }
+    .amount {
+        font-weight: 600;
+        color: var(--primary);
+    }
+    .pending {
+        font-weight: 600;
+        color: var(--danger);
+    }
+    .student-meta {
+        font-size: 0.7rem;
+        color: var(--muted);
+        display: block;
+        margin-top: 0.1rem;
+    }
+    .btn-sm {
+        background: var(--primary);
+        color: white;
+        padding: 0.15rem 0.6rem;
+        border-radius: 2rem;
+        font-size: 0.7rem;
+        text-decoration: none;
+        display: inline-block;
+    }
+    .empty-row {
+        text-align: center;
+        padding: 1.5rem;
+        color: var(--muted);
+        font-size: 0.85rem;
+    }
+    code {
+        background: var(--surface-alt);
+        padding: 0.1rem 0.3rem;
+        border-radius: 0.3rem;
+        font-family: monospace;
+        font-size: 0.75rem;
+    }
+
+    /* Collection Rate Progress Bar */
+    .rate-bar {
+        margin-top: 0.3rem;
+        height: 4px;
+        background: var(--surface-alt);
+        border-radius: 4px;
+        overflow: hidden;
+        width: 100%;
+    }
+    .rate-bar .fill {
+        height: 100%;
+        background: var(--primary);
+        border-radius: 4px;
+        transition: width 0.6s ease;
+    }
+
+    /* Chart container – kept compact */
+    .chart-card {
+        background: var(--surface);
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+        box-shadow: var(--shadow-sm);
+    }
+    .chart-card .card-header {
+        background: transparent;
+        border-bottom: none;
+        padding: 0 0 0.5rem 0;
+    }
+    .chart-card canvas {
+        max-height: 140px;
+        width: 100% !important;
+    }
+
+    /* Responsive tweaks */
+    @media (max-width: 768px) {
+        .kpi-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        .dashboard-grid {
+            grid-template-columns: 1fr;
+        }
+        .dashboard-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        .dashboard-header .school-logo {
+            align-self: flex-start;
+        }
+        .quick-actions {
+            gap: 0.5rem;
+        }
+        .action-card {
+            font-size: 0.75rem;
+            padding: 0.4rem 0.8rem;
+        }
+        .action-card svg {
+            width: 18px;
+            height: 18px;
+        }
+        .kpi-value {
+            font-size: 1.2rem;
+        }
+        .kpi-icon {
+            width: 40px;
+            height: 40px;
+            font-size: 1.2rem;
+        }
+    }
+    @media (max-width: 480px) {
+        .kpi-grid {
+            grid-template-columns: 1fr 1fr;
+        }
+        .kpi-card {
+            padding: 0.75rem;
+        }
+        .kpi-value {
+            font-size: 1.1rem;
+        }
+        .kpi-icon {
+            width: 36px;
+            height: 36px;
+            font-size: 1rem;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block body %}
-<!-- Header with welcome and logo -->
+<!-- ====== HEADER ====== -->
 <div class="dashboard-header">
-    <div>
-        <h1 class="page-title">Welcome back, {{ tenant.name }}</h1>
-        <p class="page-desc">Here's what's happening with your school finances today</p>
+    <div class="title-group">
+        <h1>Welcome back, {{ tenant.name }}</h1>
+        <p>Here's an overview of your school's financial and operational health</p>
     </div>
     {% if logo_url %}
         <img src="{{ logo_url }}" class="school-logo" alt="Logo">
     {% endif %}
 </div>
 
-<!-- Quick Actions -->
+<!-- ====== QUICK ACTIONS ====== -->
 <div class="quick-actions">
-    <a href="{% url 'fee_collection' schema_name=tenant.schema_name %}" class="action-card">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>
-        <span>Collect Fee</span>
+    <a href="{% url 'student_list' schema_name=tenant.schema_name %}" class="action-card">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+        Students
     </a>
-    <a href="{% url 'add_student' schema_name=tenant.schema_name %}" class="action-card">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 4v16m8-8H4"/></svg>
-        <span>Add Student</span>
+    <a href="{% url 'fee_collection' schema_name=tenant.schema_name %}" class="action-card">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>
+        Fee Collection
+    </a>
+    <a href="{% url 'defaulters' schema_name=tenant.schema_name %}" class="action-card">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Defaulters
     </a>
     <a href="{% url 'reports' schema_name=tenant.schema_name %}" class="action-card">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-        <span>Reports</span>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+        Reports
+    </a>
+    <a href="{% url 'stock_management' schema_name=tenant.schema_name %}" class="action-card">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7h-4.18A3 3 0 0016 5.18V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v1.18A3 3 0 008.18 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M12 12v4m-2-2h4"/></svg>
+        Stock
     </a>
     <a href="{% url 'fee_structure' schema_name=tenant.schema_name %}" class="action-card">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
-        <span>Fee Structure</span>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+        Fee Structure
+    </a>
+    <a href="{% url 'settings' schema_name=tenant.schema_name %}" class="action-card">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        Settings
     </a>
 </div>
 
-<!-- KPI Cards -->
+<!-- ====== KPI CARDS (clickable) ====== -->
 <div class="kpi-grid">
-    <div class="kpi-card">
-        <div class="kpi-icon">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-        </div>
+    <a href="{% url 'student_list' schema_name=tenant.schema_name %}" class="kpi-card">
+        <div class="kpi-icon blue"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg></div>
         <div class="kpi-info">
-            <span class="kpi-label">Today's Collection</span>
-            <span class="kpi-value">₹{{ today_collection|floatformat:2 }}</span>
-            <span class="kpi-trend">{{ start_date|date:"d M Y" }}</span>
+            <div class="kpi-label">Total Students</div>
+            <div class="kpi-value">{{ total_students }}</div>
+            <div class="kpi-sub">Enrolled</div>
         </div>
-    </div>
-    <div class="kpi-card">
-        <div class="kpi-icon">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12h3l3-9 3 18 3-9h3"/></svg>
-        </div>
+    </a>
+    <a href="{% url 'reports' schema_name=tenant.schema_name %}?type=collection&quick_filter=all" class="kpi-card">
+        <div class="kpi-icon green"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M3 12h3l3-9 3 18 3-9h3"/></svg></div>
         <div class="kpi-info">
-            <span class="kpi-label">This Month</span>
-            <span class="kpi-value">₹{{ month_collection|floatformat:2 }}</span>
-            <span class="kpi-trend">{{ today|date:"F Y" }}</span>
+            <div class="kpi-label">Total Revenue</div>
+            <div class="kpi-value">₹{{ total_revenue|floatformat:2 }}</div>
+            <div class="kpi-sub">All time</div>
         </div>
-    </div>
-    <div class="kpi-card">
-        <div class="kpi-icon">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-        </div>
+    </a>
+    <a href="{% url 'defaulters' schema_name=tenant.schema_name %}" class="kpi-card">
+        <div class="kpi-icon orange"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
         <div class="kpi-info">
-            <span class="kpi-label">Total Pending</span>
-            <span class="kpi-value">₹{{ total_pending|floatformat:2 }}</span>
-            <span class="kpi-trend">All time</span>
+            <div class="kpi-label">Total Pending</div>
+            <div class="kpi-value">₹{{ total_pending|floatformat:2 }}</div>
+            <div class="kpi-sub">All time</div>
         </div>
-    </div>
-    <div class="kpi-card">
-        <div class="kpi-icon">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-        </div>
+    </a>
+    <a href="{% url 'defaulters' schema_name=tenant.schema_name %}" class="kpi-card">
+        <div class="kpi-icon red"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
         <div class="kpi-info">
-            <span class="kpi-label">Active Defaulters</span>
-            <span class="kpi-value">{{ defaulters_count }}</span>
-            <span class="kpi-trend">With pending fees</span>
+            <div class="kpi-label">Defaulters</div>
+            <div class="kpi-value">{{ defaulters_count }}</div>
+            <div class="kpi-sub">With pending fees</div>
+        </div>
+    </a>
+    <a href="{% url 'stock_management' schema_name=tenant.schema_name %}" class="kpi-card">
+        <div class="kpi-icon purple"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
+        <div class="kpi-info">
+            <div class="kpi-label">Low Stock</div>
+            <div class="kpi-value">{{ low_stock_count }}</div>
+            <div class="kpi-sub">Items < 10</div>
+        </div>
+    </a>
+    <div class="kpi-card" style="cursor: default;">
+        <div class="kpi-icon teal"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></div>
+        <div class="kpi-info">
+            <div class="kpi-label">Collection Rate</div>
+            <div class="kpi-value">{{ collection_rate }}%</div>
+            <div class="rate-bar"><div class="fill" style="width: {{ collection_rate }}%;"></div></div>
+            <div class="kpi-sub">Paid / Total billed</div>
         </div>
     </div>
 </div>
 
-<!-- Two Column Layout -->
+<!-- ====== TWO COLUMN LAYOUT ====== -->
 <div class="dashboard-grid">
-    <!-- Left Column: Recent Payments -->
+    <!-- Recent Payments -->
     <div class="card">
         <div class="card-header">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>
             <h3>Recent Payments</h3>
-            <a href="{% url 'reports' schema_name=tenant.schema_name %}?type=collection" class="view-link">View all <svg class="inline-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18l6-6-6-6"/></svg></a>
+            <a href="{% url 'reports' schema_name=tenant.schema_name %}?type=collection&quick_filter=all" class="view-link">View all <svg class="inline-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></a>
         </div>
         <div class="table-responsive">
             <table class="data-table">
@@ -95,7 +437,7 @@
                     {% for p in recent_payments %}
                     <tr>
                         <td><code>{{ p.receipt_number }}</code></td>
-                        <td>{{ p.student.name }}<br><span class="student-meta">{{ p.student.roll_number }}</span></td>
+                        <td>{{ p.student.name }}<span class="student-meta">{{ p.student.roll_number }}</span></td>
                         <td class="amount">₹{{ p.amount|floatformat:2 }}</td>
                         <td>{{ p.payment_date|date:"d M Y" }}</td>
                         <td>{{ p.get_payment_mode_display }}</td>
@@ -108,12 +450,12 @@
         </div>
     </div>
 
-    <!-- Right Column: Top Defaulters -->
+    <!-- Top Defaulters -->
     <div class="card">
         <div class="card-header">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
             <h3>Top Defaulters</h3>
-            <a href="{% url 'defaulters' schema_name=tenant.schema_name %}" class="view-link">View all <svg class="inline-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18l6-6-6-6"/></svg></a>
+            <a href="{% url 'defaulters' schema_name=tenant.schema_name %}" class="view-link">View all <svg class="inline-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></a>
         </div>
         <div class="table-responsive">
             <table class="data-table">
@@ -121,7 +463,7 @@
                 <tbody>
                     {% for d in top_defaulters %}
                     <tr>
-                        <td><strong>{{ d.student.name }}</strong><br><span class="student-meta">{{ d.student.grade }} - {{ d.student.section }}</span></td>
+                        <td><strong>{{ d.student.name }}</strong><span class="student-meta">{{ d.student.grade }} - {{ d.student.section }}</span></td>
                         <td>{{ d.student.roll_number }}</td>
                         <td class="pending">₹{{ d.pending|floatformat:2 }}</td>
                         <td><a href="{% url 'fee_collection' schema_name=tenant.schema_name student_id=d.student.id %}" class="btn-sm">Collect</a></td>
@@ -135,253 +477,70 @@
     </div>
 </div>
 
-<!-- Collection Trend Chart -->
+<!-- ====== TREND CHART (compact) ====== -->
 <div class="chart-card">
     <div class="card-header">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v18h18"/><path d="M18 17V9M12 17V5M6 17v-3"/></svg>
-        <h3>Monthly Collection Trend (Last 6 Months)</h3>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M18 17V9M12 17V5M6 17v-3"/></svg>
+        <h3>Monthly Collection Trend</h3>
+        <span style="font-size:0.7rem; color:var(--muted);">Last 6 months</span>
     </div>
-    <canvas id="collectionChart" height="200"></canvas>
+    <canvas id="collectionChart" height="140"></canvas>
 </div>
 
-<!-- Pending Fee Summary (Optional) -->
-<div class="info-panel">
-    <div class="info-icon">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-    </div>
-    <div class="info-text">
-        <strong>Total outstanding amount:</strong> ₹{{ total_pending|floatformat:2 }} across {{ defaulters_count }} defaulters. 
-        <a href="{% url 'reports' schema_name=tenant.schema_name %}?type=defaulters">View detailed report <svg class="inline-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18l6-6-6-6"/></svg></a>
-    </div>
-</div>
-
-<style>
-.dashboard-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1.5rem;
-    flex-wrap: wrap;
-    gap: 1rem;
-}
-.page-title {
-    font-size: 1.8rem;
-    font-weight: 700;
-    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    margin-bottom: 0.25rem;
-}
-.page-desc {
-    color: var(--muted);
-}
-.school-logo {
-    height: 60px;
-    border-radius: 0.75rem;
-    border: 1px solid var(--border);
-    padding: 0.25rem;
-    background: var(--surface);
-}
-.quick-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-}
-.action-card {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.6rem 1.2rem;
-    background: var(--surface);
-    border-radius: 2rem;
-    border: 1px solid var(--border);
-    text-decoration: none;
-    color: var(--text);
-    font-weight: 500;
-    transition: all 0.2s;
-}
-.action-card:hover {
-    background: var(--primary);
-    color: white;
-    border-color: var(--primary);
-    transform: translateY(-2px);
-}
-.action-card svg {
-    transition: stroke 0.2s;
-}
-.action-card:hover svg {
-    stroke: white;
-}
-.kpi-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-}
-.kpi-card {
-    background: var(--surface);
-    border-radius: var(--radius);
-    border: 1px solid var(--border);
-    padding: 1rem;
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    box-shadow: var(--shadow-sm);
-}
-.kpi-icon {
-    width: 48px;
-    height: 48px;
-    background: var(--surface-alt);
-    border-radius: 2rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--primary);
-}
-.kpi-info {
-    flex: 1;
-}
-.kpi-label {
-    display: block;
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    color: var(--muted);
-    letter-spacing: 0.5px;
-}
-.kpi-value {
-    display: block;
-    font-size: 1.5rem;
-    font-weight: 700;
-    line-height: 1.2;
-}
-.kpi-trend {
-    font-size: 0.7rem;
-    color: var(--muted);
-}
-.dashboard-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-    gap: 1.5rem;
-    margin-bottom: 1.5rem;
-}
-.card {
-    background: var(--surface);
-    border-radius: var(--radius);
-    border: 1px solid var(--border);
-    overflow: hidden;
-}
-.card-header {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 1rem;
-    background: var(--surface-alt);
-    border-bottom: 1px solid var(--border);
-}
-.card-header h3 {
-    flex: 1;
-    font-size: 1rem;
-    font-weight: 600;
-}
-.view-link {
-    font-size: 0.8rem;
-    color: var(--primary);
-    text-decoration: none;
-}
-.table-responsive {
-    overflow-x: auto;
-}
-.data-table {
-    width: 100%;
-    border-collapse: collapse;
-}
-.data-table th, .data-table td {
-    padding: 0.75rem 1rem;
-    text-align: left;
-    border-bottom: 1px solid var(--border);
-}
-.data-table th {
-    background: var(--surface-alt);
-    font-weight: 600;
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    color: var(--muted);
-}
-.amount {
-    font-weight: 600;
-    color: var(--primary);
-}
-.pending {
-    font-weight: 600;
-    color: var(--danger);
-}
-.student-meta {
-    font-size: 0.7rem;
-    color: var(--muted);
-}
-.btn-sm {
-    background: var(--primary);
-    color: white;
-    padding: 0.2rem 0.6rem;
-    border-radius: 2rem;
-    font-size: 0.7rem;
-    text-decoration: none;
-}
-.empty-row {
-    text-align: center;
-    padding: 2rem;
-    color: var(--muted);
-}
-.chart-card {
-    background: var(--surface);
-    border-radius: var(--radius);
-    border: 1px solid var(--border);
-    margin-bottom: 1.5rem;
-    padding: 1rem;
-}
-.info-panel {
-    background: var(--surface-alt);
-    border-radius: var(--radius);
-    padding: 0.75rem 1rem;
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    font-size: 0.9rem;
-    color: var(--text);
-}
-.info-panel a {
-    color: var(--primary);
-    text-decoration: none;
-}
-</style>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- ====== SCRIPT ====== -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-    const months = {{ months_labels|safe }};
-    const amounts = {{ months_amounts|safe }};
-    const ctx = document.getElementById('collectionChart').getContext('2d');
-    new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: months,
-            datasets: [{
-                label: 'Collection (₹)',
-                data: amounts,
-                borderColor: '#3b82f6',
-                backgroundColor: 'rgba(59,130,246,0.1)',
-                fill: true,
-                tension: 0.3
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: { position: 'top' }
+    (function() {
+        const months = {{ months_labels|safe }};
+        const amounts = {{ months_amounts|safe }};
+        const ctx = document.getElementById('collectionChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: months,
+                datasets: [{
+                    label: 'Collection (₹)',
+                    data: amounts,
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59,130,246,0.08)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 2,
+                    borderWidth: 2,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return '₹' + context.parsed.y.toFixed(2);
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) { return '₹' + value; },
+                            font: { size: 10 }
+                        },
+                        grid: { display: false }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { font: { size: 10 } }
+                    }
+                },
+                elements: {
+                    line: { borderJoinStyle: 'round' }
+                }
             }
-        }
-    });
+        });
+    })();
 </script>
 {% endblock %}

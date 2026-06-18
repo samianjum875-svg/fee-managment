@@ -67,24 +67,48 @@ def get_tenant(request, schema_name):
 # ------------------- Dashboard -------------------
 @require_tenant_type(['school'])
 def dashboard(request, schema_name):
+    """Enhanced school dashboard with comprehensive KPIs and quick actions."""
     tenant = get_tenant(request, schema_name)
     with schema_context(schema_name):
         today = timezone.localdate()
         first_day_month = today.replace(day=1)
-        today_collection = PaymentTransaction.objects.filter(payment_date=today).aggregate(Sum('amount'))['amount__sum'] or 0
-        month_collection = PaymentTransaction.objects.filter(payment_date__gte=first_day_month).aggregate(Sum('amount'))['amount__sum'] or 0
+
+        # ---- Core financials ----
+        today_collection = PaymentTransaction.objects.filter(payment_date=today).aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+        month_collection = PaymentTransaction.objects.filter(payment_date__gte=first_day_month).aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+        
+        # Total revenue (all time)
+        total_revenue = PaymentTransaction.objects.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+        
+        # Total pending (all unpaid fee records)
         pending_records = FeeRecord.objects.all()
         total_pending = sum(fr.remaining for fr in pending_records)
+        
+        # Defaulters count (students with pending/partial/overdue)
         defaulters_count = Student.objects.filter(fee_records__status__in=['pending', 'partial', 'overdue']).distinct().count()
-        total_payments_count = PaymentTransaction.objects.count()
-        recent_payments = PaymentTransaction.objects.select_related('student').order_by('-payment_date')[:5]
-        recent_payments = list(recent_payments)
+        
+        # Total students
+        total_students = Student.objects.count()
+        
+        # Low stock items (quantity < 10)
+        low_stock_count = Product.objects.filter(quantity__lt=10).count()
+        
+        # Collection rate
+        total_billed = total_revenue + total_pending
+        collection_rate = (float(total_revenue) / float(total_billed) * 100) if total_billed > 0 else 0
+        
+        # Recent payments (last 5)
+        recent_payments = list(PaymentTransaction.objects.select_related('student').order_by('-payment_date')[:5])
+        
+        # Top defaulters (by pending amount)
         top_defaulters = []
         for student in Student.objects.all():
             pending = get_overall_pending(student)
             if pending > 0:
                 top_defaulters.append({'student': student, 'pending': pending})
         top_defaulters = sorted(top_defaulters, key=lambda x: x['pending'], reverse=True)[:5]
+        
+        # Monthly trend (last 6 months)
         months_labels = []
         months_amounts = []
         for i in range(5, -1, -1):
@@ -96,17 +120,29 @@ def dashboard(request, schema_name):
             total = PaymentTransaction.objects.filter(payment_date__year=y, payment_date__month=m).aggregate(Sum('amount'))['amount__sum'] or 0
             months_labels.append(f"{m}/{y}")
             months_amounts.append(float(total))
+        
+        # ---- Additional data for quick actions (optional) ----
+        # Not needed now
+
     context = {
-        'tenant': tenant, 'today_collection': today_collection, 'month_collection': month_collection,
-        'total_pending': total_pending, 'defaulters_count': defaulters_count,
-        'recent_payments': recent_payments, 'top_defaulters': top_defaulters,
-        'months_labels': months_labels, 'months_amounts': months_amounts,
+        'tenant': tenant,
+        'today_collection': today_collection,
+        'month_collection': month_collection,
+        'total_revenue': total_revenue,
+        'total_pending': total_pending,
+        'defaulters_count': defaulters_count,
+        'total_students': total_students,
+        'low_stock_count': low_stock_count,
+        'collection_rate': round(collection_rate, 1),
+        'recent_payments': recent_payments,
+        'top_defaulters': top_defaulters,
+        'months_labels': months_labels,
+        'months_amounts': months_amounts,
         'logo_url': tenant.school_logo.url if tenant.school_logo else None,
-        'today': today, 'start_date': first_day_month,
+        'today': today,
+        'start_date': first_day_month,
     }
     return render(request, 'tenant/dashboard.html', context)
-
-# ------------------- Student List -------------------
 @require_tenant_type(['school'])
 def student_list(request, schema_name):
     tenant = get_tenant(request, schema_name)
