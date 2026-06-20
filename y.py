@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 Recovery script for axis_school_sys.
-Restores from 'backup' remote (or any specified commit).
-Usage: python3 waps.py
+Restores from 'backup' remote's 'daily-backup' branch.
+Usage: python3 y.py
 """
 
 import subprocess
@@ -23,7 +23,7 @@ def main():
         print("❌ Error: Yeh Git repo nahi hai!")
         return
 
-    # 1. Check if 'backup' remote exists
+    # Check if 'backup' remote exists
     try:
         subprocess.check_output("git remote get-url backup", shell=True, stderr=subprocess.DEVNULL)
     except subprocess.CalledProcessError:
@@ -31,22 +31,20 @@ def main():
         print("   git remote add backup https://github.com/samianjum/fee-managment.git")
         return
 
-    # 2. Fetch from backup remote
     print("📡 Fetching from backup remote...")
     run_cmd("git fetch backup")
 
-    # 3. Show recent commits from backup
-    print("\n--- RECENT COMMITS ON BACKUP REMOTE ---")
+    print("\n--- RECENT COMMITS ON BACKUP/DAILY-BACKUP ---")
     try:
         log_output = subprocess.check_output(
-            "git log backup/main --oneline -n 10", shell=True
+            "git log backup/daily-backup --oneline -n 10", shell=True
         ).decode().strip()
         print(log_output)
     except subprocess.CalledProcessError:
-        print("⚠️  Could not fetch log from backup/main. Trying 'backup/master'...")
+        print("⚠️  Could not fetch log from backup/daily-backup. Trying 'backup/main'...")
         try:
             log_output = subprocess.check_output(
-                "git log backup/master --oneline -n 10", shell=True
+                "git log backup/main --oneline -n 10", shell=True
             ).decode().strip()
             print(log_output)
         except:
@@ -55,14 +53,12 @@ def main():
 
     print("----------------------------------------")
 
-    # 4. Ask user which commit to restore
     target = input("\n🔙 Kis commit par restore karna hai? (Enter commit hash or 'latest'): ").strip()
 
     if not target:
         print("❌ Cancelled: Koi input nahi diya.")
         return
 
-    # 5. Confirm
     print("\n⚠️  WARNING: Yeh operation aapki current working directory ko overwrite kar dega!")
     confirm = input("Kya aap pakka restore karna chahte hain? (y/n): ").strip().lower()
 
@@ -70,14 +66,11 @@ def main():
         print("❌ Operation cancelled.")
         return
 
-    # 6. Perform restore
     try:
         if target.lower() == 'latest':
-            # Restore from the latest commit on backup/main
-            print("🔄 Restoring from latest backup...")
-            run_cmd("git reset --hard backup/main")
+            print("🔄 Restoring from latest backup (backup/daily-backup)...")
+            run_cmd("git reset --hard backup/daily-backup")
         else:
-            # Restore from specific commit hash
             print(f"🔄 Restoring to commit {target}...")
             run_cmd(f"git reset --hard {target}")
 
