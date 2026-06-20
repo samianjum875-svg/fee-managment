@@ -80,9 +80,10 @@ def dashboard(request, schema_name):
         # Total revenue (all time)
         total_revenue = PaymentTransaction.objects.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
         
-        # Total pending (all unpaid fee records)
-        pending_records = FeeRecord.objects.all()
-        total_pending = sum(fr.remaining for fr in pending_records)
+        # Total pending – overall pending (fee + items - paid) for each student
+        total_pending = Decimal('0')
+        for student in Student.objects.all():
+            total_pending += get_overall_pending(student)
         
         # Defaulters count (students with pending/partial/overdue)
         defaulters_count = Student.objects.filter(fee_records__status__in=['pending', 'partial', 'overdue']).distinct().count()
@@ -121,9 +122,6 @@ def dashboard(request, schema_name):
             total = PaymentTransaction.objects.filter(payment_date__year=y, payment_date__month=m).aggregate(Sum('amount'))['amount__sum'] or 0
             months_labels.append(f"{m}/{y}")
             months_amounts.append(float(total))
-        
-        # ---- Additional data for quick actions (optional) ----
-        # Not needed now
 
     context = {
         'tenant': tenant,
@@ -144,7 +142,6 @@ def dashboard(request, schema_name):
         'start_date': first_day_month,
     }
     return render(request, 'tenant/dashboard.html', context)
-@require_tenant_type(['school'])
 def student_list(request, schema_name):
     tenant = get_tenant(request, schema_name)
     query = request.GET.get('q', '')
@@ -326,8 +323,11 @@ def fee_receipt(request, schema_name, receipt_id):
             'payment_type_display': payment.payment_type,
         }
     return render(request, 'tenant/receipt.html', context)
+
 def defaulters(request, schema_name):
-    """Defaulters list with search, filters, pagination, and analytics KPIs."""
+    """Defaulters list with search, filters, pagination, and analytics KPIs.
+       Now includes students with overall pending (fee + items) even if no pending fee record.
+    """
     tenant = get_tenant(request, schema_name)
     
     # Get query parameters
@@ -349,43 +349,42 @@ def defaulters(request, schema_name):
         today = timezone.localdate()
         cutoff = today - timedelta(days=days) if days > 0 else None
         
-        # Base queryset: students with pending/partial/overdue fees
-        base_qs = Student.objects.filter(
-            fee_records__status__in=['pending', 'partial', 'overdue']
-        ).distinct()
-        
-        # Apply overdue days filter
-        if cutoff:
-            base_qs = base_qs.filter(fee_records__due_date__lte=cutoff)
+        # Start with all students (filter by search/grade/section if provided)
+        students_qs = Student.objects.all()
         
         # Apply search
         if q:
-            base_qs = base_qs.filter(
+            students_qs = students_qs.filter(
                 Q(name__icontains=q) |
                 Q(roll_number__icontains=q) |
                 Q(father_name__icontains=q) |
                 Q(father_cnic__icontains=q) |
                 Q(parent_mobile__icontains=q)
             )
-        
         # Apply grade filter
         if grade:
-            base_qs = base_qs.filter(grade=grade)
-        
+            students_qs = students_qs.filter(grade=grade)
         # Apply section filter
         if section:
-            base_qs = base_qs.filter(section=section)
+            students_qs = students_qs.filter(section=section)
         
         # Build result list with computed fields
         result = []
-        for student in base_qs:
+        for student in students_qs:
+            overall_pending = get_overall_pending(student)
+            if overall_pending <= 0:
+                continue  # skip students with zero overall pending
+            
+            # Compute fee-only pending (still needed for display)
             fee_pending = sum(fr.remaining for fr in student.fee_records.filter(status__in=['pending','partial','overdue']))
-            total_pending = get_overall_pending(student)
+            
+            # Determine oldest due date among pending fee records (for overdue days)
             oldest_due = student.fee_records.filter(status__in=['pending', 'partial', 'overdue']).order_by('due_date').first()
             days_overdue = (today - oldest_due.due_date).days if oldest_due and oldest_due.due_date < today else 0
+            
             result.append({
                 'student': student,
-                'pending_amount': total_pending,
+                'pending_amount': overall_pending,
                 'fee_pending': fee_pending,
                 'days_overdue': days_overdue
             })
@@ -429,7 +428,6 @@ def defaulters(request, schema_name):
         'logo_url': tenant.school_logo.url if tenant.school_logo else None,
     }
     return render(request, 'tenant/defaulters.html', context)
-@require_tenant_type(['school'])
 def reports(request, schema_name):
     tenant = get_tenant(request, schema_name)
     report_type = request.GET.get('type', 'collection')
