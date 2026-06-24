@@ -70,9 +70,15 @@ WSGI_APPLICATION = 'axis_saas.wsgi.application'
 # Database – force django_tenants backend
 if os.environ.get('DATABASE_URL'):
     import dj_database_url
-    DATABASES = {
-        'default': dj_database_url.config(conn_max_age=600, ssl_require=True)
-    }
+    database_url = os.environ['DATABASE_URL']
+    if 'sslmode=disable' in database_url.lower():
+        DATABASES = {
+            'default': dj_database_url.parse(database_url, conn_max_age=600)
+        }
+    else:
+        DATABASES = {
+            'default': dj_database_url.config(conn_max_age=600, ssl_require=True)
+        }
     DATABASES['default']['ENGINE'] = 'django_tenants.postgresql_backend'
 else:
     DATABASES = {
