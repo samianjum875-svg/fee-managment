@@ -24,4 +24,8 @@ def humanize_number(value):
     if num < 1000000000:
         return f"{num/1000000:.1f}M" if num % 1000000 != 0 else f"{int(num/1000000)}M"
     return f"{num/1000000000:.1f}B" if num % 1000000000 != 0 else f"{int(num/1000000000)}B"
+@register.filter
+def has_feature(tenant, feature_name):
+    """Return True if tenant has the given feature enabled."""
+    return tenant.is_feature_enabled(feature_name)
 
