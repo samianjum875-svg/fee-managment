@@ -9,8 +9,8 @@
      ============================================================ */
 
   :root {
-    --card-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
-    --card-radius: 0.9rem;
+    --card-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+    --card-radius: 1.25rem;
     --glass-bg: rgba(255, 255, 255, 0.88);
     --glass-border: rgba(255, 255, 255, 0.5);
     --gradient-start: #3b82f6;
@@ -24,9 +24,9 @@
   .analytics-strip {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 0.6rem;
+    gap: 0.75rem;
     margin-bottom: 1.25rem;
-    padding: 0.3rem 0.1rem;
+    padding: 0.5rem 0.25rem;
     background: var(--glass-bg);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
@@ -52,7 +52,7 @@
     transform: scale(0.96);
   }
   .analytics-strip .stat-number {
-    font-size: 1.2rem;
+    font-size: 1.4rem;
     font-weight: 800;
     color: var(--text);
     line-height: 1.2;
@@ -63,7 +63,7 @@
     color: var(--muted);
   }
   .analytics-strip .stat-label {
-    font-size: 0.55rem;
+    font-size: 0.6rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--muted);
@@ -85,11 +85,11 @@
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    margin-bottom: 0.3rem;
+    margin-bottom: 0.5rem;
     padding: 0 0.25rem;
   }
   .page-header h1 {
-    font-size: 1.6rem;
+    font-size: 1.8rem;
     font-weight: 800;
     margin: 0;
     background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
@@ -98,19 +98,24 @@
     color: transparent;
     letter-spacing: -0.02em;
   }
+  .page-header .subtitle {
+    font-size: 0.8rem;
+    color: var(--muted);
+    font-weight: 500;
+  }
 
   /* ---- FAB ---- */
   .fab-add {
     position: fixed;
-    bottom: 85px;
+    bottom: 100px;
     right: 1.5rem;
     background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
     color: white;
     border: none;
     border-radius: 999px;
-    width: 48px;
-    height: 48px;
-    font-size: 1.6rem;
+    width: 56px;
+    height: 56px;
+    font-size: 1.8rem;
     box-shadow: 0 8px 28px rgba(59, 130, 246, 0.35);
     cursor: pointer;
     display: flex;
@@ -150,7 +155,7 @@
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border-radius: 3rem;
-    padding: 0.1rem 0.1rem 0.1rem 1rem;
+    padding: 0.2rem 0.2rem 0.2rem 1.2rem;
     border: 1px solid var(--glass-border);
     box-shadow: 0 4px 20px rgba(0,0,0,0.04);
   }
@@ -158,8 +163,8 @@
     flex: 1;
     border: none;
     background: transparent;
-    font-size: 0.85rem;
-    padding: 0.4rem 0;
+    font-size: 0.95rem;
+    padding: 0.6rem 0;
     outline: none;
     color: var(--text);
     font-weight: 500;
@@ -175,7 +180,7 @@
     border-radius: 2.5rem;
     padding: 0.5rem 1.2rem;
     font-weight: 700;
-    font-size: 0.75rem;
+    font-size: 0.85rem;
     cursor: pointer;
     transition: all 0.2s;
     white-space: nowrap;
@@ -241,7 +246,7 @@
     border-radius: 2rem;
     border: 1px solid var(--border);
     background: var(--surface-alt);
-    font-size: 0.75rem;
+    font-size: 0.85rem;
     font-weight: 500;
     color: var(--text);
     appearance: none;
@@ -259,7 +264,7 @@
     border: 1px solid var(--border);
     font-weight: 600;
     text-decoration: none;
-    font-size: 0.75rem;
+    font-size: 0.85rem;
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
@@ -269,11 +274,11 @@
     background: var(--surface);
   }
 
-  /* ---- Student Cards (status‑aware, compact) ---- */
+  /* ---- Student Cards (status‑aware) ---- */
   .student-list {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
+    gap: 0.85rem;
     animation: fadeInUp 0.4s ease;
   }
   .student-card {
@@ -281,12 +286,12 @@
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border-radius: var(--card-radius);
-    padding: 0.6rem 0.8rem;
+    padding: 0.9rem 1rem;
     border: 1px solid var(--glass-border);
     box-shadow: var(--card-shadow);
     display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
+    align-items: center;
+    gap: 0.8rem;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
     position: relative;
     overflow: hidden;
@@ -317,47 +322,45 @@
   .student-card:active {
     transform: scale(0.98);
   }
-
-  /* Card top row: name left, badge right */
-  .card-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 0.5rem;
+  .student-info {
+    flex: 1;
+    min-width: 0;
   }
   .student-name {
     font-weight: 700;
-    font-size: 0.85rem;
+    font-size: 1.05rem;
     color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
   }
-  .badge {
+  .student-name .badge {
     display: inline-block;
-    padding: 0.05rem 0.5rem;
+    padding: 0.1rem 0.5rem;
     border-radius: 999px;
-    font-size: 0.55rem;
+    font-size: 0.6rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.03em;
-    white-space: nowrap;
-    flex-shrink: 0;
   }
   .badge-active { background: #d1fae5; color: #065f46; }
   .badge-suspended { background: #fef3c7; color: #92400e; }
   .badge-graduated { background: #ede9fe; color: #5b21b6; }
 
   .student-meta {
-    font-size: 0.75rem;
+    font-size: 0.82rem;
     color: var(--muted);
-    margin-top: 0.1rem;
+    margin-top: 0.15rem;
   }
   .student-meta .separator {
     margin: 0 0.3rem;
     opacity: 0.4;
   }
   .student-father {
-    font-size: 0.65rem;
+    font-size: 0.78rem;
     color: var(--muted);
-    margin-top: 0.05rem;
+    margin-top: 0.1rem;
   }
   .student-father svg {
     display: inline;
@@ -367,13 +370,11 @@
     height: 14px;
     stroke: var(--muted);
   }
-
-  /* Pending (only shown when > 0) */
   .student-pending {
     font-weight: 700;
-    font-size: 0.75rem;
+    font-size: 0.9rem;
     margin-top: 0.15rem;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 0.3rem;
   }
@@ -382,6 +383,12 @@
     height: 8px;
     border-radius: 50%;
     display: inline-block;
+  }
+  .student-pending .pending-dot.zero {
+    background: var(--status-active);
+    animation: none;
+  }
+  .student-pending .pending-dot.nonzero {
     background: var(--danger);
     animation: pulse 1.5s infinite;
   }
@@ -392,20 +399,21 @@
   .student-pending .pending-amount {
     color: var(--danger);
   }
+  .student-pending .pending-amount.zero {
+    color: var(--status-active);
+  }
 
-  /* Action buttons */
   .student-actions {
     display: flex;
     gap: 0.3rem;
-    margin-top: 0.3rem;
-    justify-content: flex-end;
+    flex-shrink: 0;
   }
   .student-actions a {
     background: var(--surface-alt);
     border: 1px solid var(--border);
     border-radius: 2rem;
-    padding: 0.2rem 0.5rem;
-    font-size: 0.65rem;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.7rem;
     font-weight: 600;
     text-decoration: none;
     color: var(--text);
@@ -439,7 +447,7 @@
     background: var(--surface);
     text-decoration: none;
     color: var(--text);
-    font-size: 0.75rem;
+    font-size: 0.85rem;
     font-weight: 500;
     transition: all 0.2s;
   }
@@ -535,6 +543,7 @@
     }
     .student-card {
       padding: 0.7rem 0.8rem;
+      gap: 0.7rem;
     }
     .student-name {
       font-size: 1rem;
@@ -546,7 +555,9 @@
 {% block body %}
 <div class="page-header">
   <h1>Students</h1>
-  <!-- total count removed as requested -->
+  <div class="subtitle">
+    {{ students.paginator.count|default:0 }} total
+  </div>
 </div>
 
 <!-- ===== Analytics Strip (clickable) ===== -->
@@ -610,35 +621,31 @@
   {% if students %}
     {% for s in students %}
     <div class="student-card status-{{ s.status }}" data-name="{{ s.name|lower }}" data-roll="{{ s.roll_number|lower }}" data-father="{{ s.father_name|lower }}">
-      <!-- Top row: name + status badge -->
-      <div class="card-top">
-        <div class="student-name">{{ s.name }}</div>
-        <span class="badge badge-{{ s.status }}">{{ s.get_status_display }}</span>
-      </div>
-
-      <div class="student-meta">
-        {{ s.grade }}<span class="separator">•</span>{{ s.section }}
-        <span class="separator">•</span>Roll {{ s.roll_number }}
-      </div>
-
-      <div class="student-father">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
-          <circle cx="9" cy="7" r="4"/>
-          <path d="M23 21v-2a4 4 0 00-3-3.87"/>
-          <path d="M16 3.13a4 4 0 010 7.75"/>
-        </svg>
-        {{ s.father_name }}
-      </div>
-
-      <!-- Pending: shown only if > 0 -->
-      {% if s.pending_amount > 0 %}
-        <div class="student-pending">
-          <span class="pending-dot"></span>
-          <span class="pending-amount">Pending: ₹{{ s.pending_amount|floatformat:2 }}</span>
+      <div class="student-info">
+        <div class="student-name">
+          {{ s.name }}
+          <span class="badge badge-{{ s.status }}">{{ s.get_status_display }}</span>
         </div>
-      {% endif %}
-
+        <div class="student-meta">
+          {{ s.grade }}<span class="separator">•</span>{{ s.section }}
+          <span class="separator">•</span>Roll {{ s.roll_number }}
+        </div>
+        <div class="student-father">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 00-3-3.87"/>
+            <path d="M16 3.13a4 4 0 010 7.75"/>
+          </svg>
+          {{ s.father_name }}
+        </div>
+        <div class="student-pending">
+          <span class="pending-dot {% if s.pending_amount > 0 %}nonzero{% else %}zero{% endif %}"></span>
+          <span class="pending-amount {% if s.pending_amount == 0 %}zero{% endif %}">
+            Pending: ₹{{ s.pending_amount|floatformat:2 }}
+          </span>
+        </div>
+      </div>
       <div class="student-actions">
         <a href="{% url 'mobile_student_profile' schema_name=tenant.schema_name student_id=s.id %}" title="Profile">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>

@@ -180,6 +180,7 @@ def get_student_list_context(request, schema_name):
     grade = request.GET.get('grade', '')
     section = request.GET.get('section', '')
     status = request.GET.get('status', '')
+    pending_only = request.GET.get('pending_only') == '1'   # <-- new
     page_number = request.GET.get('page', 1)
     with schema_context(schema_name):
         students = Student.objects.all()
@@ -196,15 +197,28 @@ def get_student_list_context(request, schema_name):
         if status:
             students = students.filter(status=status)
         students = students.order_by('-enrolled_on')
+        
+        # Compute pending for all students first
+        student_list = []
         for s in students:
             s.pending_amount = get_overall_pending(s)
-        paginator = Paginator(students, 20)
+            student_list.append(s)
+        
+        # Apply pending_only filter if needed
+        if pending_only:
+            student_list = [s for s in student_list if s.pending_amount > 0]
+        
+        total_pending_all = sum(s.pending_amount for s in student_list)
+        
+        # Paginate the filtered list
+        paginator = Paginator(student_list, 20)
         page_obj = paginator.get_page(page_number)
+        
         grades = list(Student.objects.values_list('grade', flat=True).distinct().order_by('grade'))
         sections = list(Student.objects.values_list('section', flat=True).distinct().order_by('section'))
         status_choices = Student.STATUS_CHOICES
-        total_pending_all = sum(s.pending_amount for s in students)
         total_active = Student.objects.filter(status='active').count()
+        
     return {
         'tenant': tenant,
         'students': page_obj,
@@ -212,11 +226,10 @@ def get_student_list_context(request, schema_name):
         'sections': sections,
         'status_choices': status_choices,
         'search_query': query,
+        'total_pending_all': total_pending_all,
+        'total_active': total_active,
         'logo_url': tenant.school_logo.url if tenant.school_logo else None,
     }
-
-@require_tenant_type(['school'])
-@require_school_feature('students')
 def student_list(request, schema_name):
     if is_mobile_user_agent(request):
         return redirect('mobile_student_list', schema_name=schema_name)
