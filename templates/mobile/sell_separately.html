@@ -1,0 +1,253 @@
+{% extends 'mobile/base.html' %}
+{% load fee_extras %}
+{% block title %}Sell Items | {{ tenant.name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+  }
+  .page-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .page-desc {
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+  }
+
+  .search-card {
+    background: var(--surface);
+    border-radius: 1.5rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border);
+  }
+  .search-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .search-form .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+  .search-form .form-group label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .search-form .form-group input,
+  .search-form .form-group select {
+    padding: 0.6rem 0.75rem;
+    border-radius: 0.75rem;
+    border: 1px solid var(--border);
+    background: var(--surface-alt);
+    font-size: 0.9rem;
+  }
+  .search-form .form-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+  }
+  .search-form .form-actions button,
+  .search-form .form-actions a {
+    flex: 1;
+    padding: 0.6rem;
+    border-radius: 2rem;
+    font-weight: 600;
+    text-align: center;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+  }
+  .btn-primary {
+    background: var(--primary);
+    color: white;
+  }
+  .btn-secondary {
+    background: var(--surface-alt);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+
+  .results-card {
+    margin-top: 1rem;
+  }
+  .results-card h3 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--muted);
+    margin-bottom: 0.5rem;
+  }
+  .student-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .student-card {
+    background: var(--surface);
+    border-radius: 1.25rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: var(--shadow-sm);
+  }
+  .student-info {
+    flex: 1;
+  }
+  .student-name {
+    font-weight: 700;
+    font-size: 0.95rem;
+  }
+  .student-meta {
+    font-size: 0.7rem;
+    color: var(--muted);
+  }
+  .student-action {
+    margin-left: 0.5rem;
+  }
+  .student-action a {
+    background: var(--primary);
+    color: white;
+    padding: 0.3rem 0.8rem;
+    border-radius: 2rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: var(--muted);
+  }
+  .empty-state svg {
+    width: 48px;
+    height: 48px;
+    stroke: var(--muted);
+    opacity: 0.3;
+    margin-bottom: 0.5rem;
+  }
+
+  .info-card {
+    background: var(--surface);
+    border-radius: 1.5rem;
+    padding: 1.25rem;
+    border: 1px solid var(--border);
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    box-shadow: var(--shadow-sm);
+  }
+  .info-card svg {
+    flex-shrink: 0;
+    color: var(--primary);
+  }
+  .info-text {
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Sell Items</h1>
+    <p class="page-desc">Search for a student and collect payment for selected items</p>
+  </div>
+</div>
+
+<!-- Search -->
+<div class="search-card">
+  <form method="get" class="search-form">
+    <div class="form-group">
+      <label>Search Student</label>
+      <input type="text" name="search" value="{{ search_query }}" placeholder="Name, Roll, Father, CNIC, Phone">
+    </div>
+    <div class="form-group">
+      <label>Grade</label>
+      <select name="grade">
+        <option value="">All</option>
+        {% for g in grades %}
+        <option value="{{ g }}" {% if grade_filter == g %}selected{% endif %}>{{ g }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Section</label>
+      <select name="section">
+        <option value="">All</option>
+        {% for s in sections %}
+        <option value="{{ s }}" {% if section_filter == s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn-primary">Search</button>
+      {% if search_query or grade_filter or section_filter %}
+      <a href="{% url 'mobile_sell_separately' schema_name=tenant.schema_name %}" class="btn-secondary">Clear</a>
+      {% endif %}
+    </div>
+  </form>
+</div>
+
+<!-- Results -->
+{% if search_results %}
+<div class="results-card">
+  <h3>{{ search_results|length }} student(s) found</h3>
+  <div class="student-grid">
+    {% for s in search_results %}
+    <div class="student-card">
+      <div class="student-info">
+        <div class="student-name">{{ s.name }}</div>
+        <div class="student-meta">Roll: {{ s.roll_number }} | {{ s.grade }} - {{ s.section }}</div>
+        <div class="student-meta">Father: {{ s.father_name }} | CNIC: {{ s.father_cnic }}</div>
+        <div class="student-meta">Phone: {{ s.parent_mobile }}</div>
+      </div>
+      <div class="student-action">
+        <a href="{% url 'mobile_fee_collection' schema_name=tenant.schema_name student_id=s.id %}">Collect</a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% elif search_query %}
+<div class="empty-state">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+    <circle cx="12" cy="12" r="10"/>
+    <path d="M12 8v4m0 4h.01"/>
+  </svg>
+  <p>No students match your search. Try adjusting the filters.</p>
+</div>
+{% else %}
+<div class="info-card">
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <circle cx="12" cy="12" r="10"/>
+    <path d="M12 16v-4M12 8h.01"/>
+  </svg>
+  <div class="info-text">
+    Search for a student using name, roll number, father's name, CNIC or phone number.<br>
+    After selecting, you will be taken to the fee collection page where you can add items and process payment.
+  </div>
+</div>
+{% endif %}
+
+<!-- bottom spacer for nav -->
+<div style="height: 80px;"></div>
+{% endblock %}

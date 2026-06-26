@@ -4,6 +4,23 @@
 
 {% block extra_head %}
 <style>
+  .page-header {
+    margin-bottom: 0.5rem;
+  }
+  .page-title {
+    font-size: 1.6rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .page-desc {
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+  }
+
   .more-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -12,82 +29,180 @@
   }
   .more-card {
     background: rgba(255,255,255,0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     border-radius: 1.3rem;
     border: 1px solid rgba(148,163,184,0.18);
     padding: 1rem;
     display: flex;
     flex-direction: column;
     gap: 0.8rem;
-    min-height: 140px;
+    min-height: 130px;
     box-shadow: 0 18px 50px rgba(15,23,42,0.06);
     text-decoration: none;
     color: inherit;
+    transition: all 0.2s ease;
   }
   .more-card:hover {
     transform: translateY(-2px);
+    box-shadow: 0 24px 60px rgba(15,23,42,0.1);
+    border-color: var(--primary);
   }
-  .more-card .icon {
+  .more-card:active {
+    transform: scale(0.96);
+  }
+  .more-card .icon-wrapper {
     width: 42px;
     height: 42px;
     border-radius: 14px;
-    display: grid;
-    place-items: center;
-    background: rgba(91,74,224,0.12);
-    color: #5B4AE0;
-    font-size: 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(59,130,246,0.12);
+    color: var(--primary);
+  }
+  .more-card .icon-wrapper svg {
+    width: 24px;
+    height: 24px;
+    stroke: currentColor;
+    stroke-width: 2;
+    fill: none;
   }
   .more-card h3 {
     font-size: 1rem;
     margin: 0;
     font-weight: 700;
+    color: var(--text);
   }
   .more-card p {
     color: var(--muted);
-    font-size: 0.88rem;
-    line-height: 1.5;
+    font-size: 0.78rem;
+    line-height: 1.4;
     margin: 0;
+  }
+
+  .bottom-spacer {
+    height: 80px;
+  }
+
+  @media (max-width: 480px) {
+    .more-grid {
+      gap: 0.7rem;
+    }
+    .more-card {
+      min-height: 110px;
+      padding: 0.8rem;
+    }
+    .more-card .icon-wrapper {
+      width: 36px;
+      height: 36px;
+    }
+    .more-card .icon-wrapper svg {
+      width: 20px;
+      height: 20px;
+    }
+    .more-card h3 {
+      font-size: 0.9rem;
+    }
+    .more-card p {
+      font-size: 0.7rem;
+    }
   }
 </style>
 {% endblock %}
 
 {% block body %}
 <div class="page-header">
-    <div>
-        <h1 class="page-title">More Actions</h1>
-        <p class="page-desc">Fast access to fee structure, stock sell, settings, and top workflows</p>
-    </div>
+  <div>
+    <h1 class="page-title">More Actions</h1>
+    <p class="page-desc">Quick access to key management tools</p>
+  </div>
 </div>
 
 <div class="more-grid">
-    <a href="{% url 'mobile_fee_structure' schema_name=tenant.schema_name %}" class="more-card">
-        <div class="icon">📋</div>
-        <h3>Fee Structure</h3>
-        <p>Review and update fee groups, class fees and billing rules.</p>
-    </a>
-    <a href="{% url 'sell_separately' schema_name=tenant.schema_name %}" class="more-card">
-        <div class="icon">🛒</div>
-        <h3>Sell Separately</h3>
-        <p>Sell items directly to students and record item-wise payments.</p>
-    </a>
-    <a href="{% url 'reports' schema_name=tenant.schema_name %}?type=collection" class="more-card">
-        <div class="icon">📈</div>
-        <h3>Reports</h3>
-        <p>Open financial and collection reports for cash flow insight.</p>
-    </a>
-    <a href="{% url 'stock_management' schema_name=tenant.schema_name %}" class="more-card">
-        <div class="icon">📦</div>
-        <h3>Stock Management</h3>
-        <p>Manage inventory, product listings and stock movement.</p>
-    </a>
-    <a href="{% url 'student_list' schema_name=tenant.schema_name %}" class="more-card">
-        <div class="icon">👥</div>
-        <h3>Student Directory</h3>
-        <p>Search students, open profiles, and collect fees fast.</p>
-    </a>
-    <a href="{% url 'settings' schema_name=tenant.schema_name %}" class="more-card">
-        <div class="icon">⚙️</div>
-        <h3>Settings</h3>
-        <p>Change portal settings, app preferences and billing options.</p>
-    </a>
+  <!-- Sell Separately -->
+  <a href="{% url 'mobile_sell_separately' schema_name=tenant.schema_name %}" class="more-card">
+    <div class="icon-wrapper">
+      <svg viewBox="0 0 24 24"><path d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>
+    </div>
+    <h3>Sell Separately</h3>
+    <p>Sell stock items to a student (fee optional).</p>
+  </a>
+
+  <!-- Add Student -->
+  <a href="{% url 'add_student_mobile' schema_name=tenant.schema_name %}" class="more-card">
+    <div class="icon-wrapper">
+      <svg viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"/></svg>
+    </div>
+    <h3>Add Student</h3>
+    <p>Enroll a new student quickly.</p>
+  </a>
+
+  <!-- Add Product (via stock management) -->
+  <a href="{% url 'mobile_stock_management' schema_name=tenant.schema_name %}" class="more-card">
+    <div class="icon-wrapper">
+      <svg viewBox="0 0 24 24"><path d="M20 7h-4.18A3 3 0 0016 5.18V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v1.18A3 3 0 008.18 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M12 12v4m-2-2h4"/></svg>
+    </div>
+    <h3>Add Product</h3>
+    <p>Add new items to inventory.</p>
+  </a>
+
+  <!-- Defaulters -->
+  <a href="{% url 'defaulters' schema_name=tenant.schema_name %}" class="more-card">
+    <div class="icon-wrapper">
+      <svg viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    </div>
+    <h3>Defaulters</h3>
+    <p>View students with overdue fees.</p>
+  </a>
+
+  <!-- Reports -->
+  <a href="{% url 'reports' schema_name=tenant.schema_name %}?type=collection" class="more-card">
+    <div class="icon-wrapper">
+      <svg viewBox="0 0 24 24"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+    </div>
+    <h3>Reports</h3>
+    <p>Financial analytics and transaction history.</p>
+  </a>
+
+  <!-- Family Payment -->
+  <a href="{% url 'family_payment' schema_name=tenant.schema_name %}" class="more-card">
+    <div class="icon-wrapper">
+      <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+    </div>
+    <h3>Family Payment</h3>
+    <p>Pay fees for all children using father's CNIC.</p>
+  </a>
+
+  <!-- Fee Structure -->
+  <a href="{% url 'mobile_fee_structure' schema_name=tenant.schema_name %}" class="more-card">
+    <div class="icon-wrapper">
+      <svg viewBox="0 0 24 24"><path d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+    </div>
+    <h3>Fee Structure</h3>
+    <p>Set monthly fees per grade/class.</p>
+  </a>
+
+  <!-- Fee Settings (only if feature enabled) -->
+  {% if tenant|has_feature:'fee_settings' %}
+  <a href="{% url 'fee_settings' schema_name=tenant.schema_name %}" class="more-card">
+    <div class="icon-wrapper">
+      <svg viewBox="0 0 24 24"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+    </div>
+    <h3>Fee Settings</h3>
+    <p>Configure automation and late fee rules.</p>
+  </a>
+  {% endif %}
+
+  <!-- Settings -->
+  <a href="{% url 'settings' schema_name=tenant.schema_name %}" class="more-card">
+    <div class="icon-wrapper">
+      <svg viewBox="0 0 24 24"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+    </div>
+    <h3>Settings</h3>
+    <p>School profile, logo, and admin credentials.</p>
+  </a>
 </div>
+
+<div class="bottom-spacer"></div>
 {% endblock %}

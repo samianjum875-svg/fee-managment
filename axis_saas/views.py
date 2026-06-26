@@ -2808,7 +2808,7 @@ def delete_product(request, schema_name, product_id):
 
 # ==================== SELL SEPARATELY (standalone student search) ====================
 @require_tenant_type(['school'])
-def sell_separately(request, schema_name):
+def sell_separately(request, schema_name, mobile=False):
     """Page to search for a student and then redirect to fee collection for that student."""
     tenant = get_tenant(request, schema_name)
     search_query = request.GET.get('search', '').strip()
@@ -2845,4 +2845,11 @@ def sell_separately(request, schema_name):
         'sections': sections,
         'logo_url': tenant.school_logo.url if tenant.school_logo else None,
     }
-    return render(request, 'tenant/sell_separately.html', context)
+    template = 'mobile/sell_separately.html' if mobile else 'tenant/sell_separately.html'
+    return render(request, template, context)
+
+
+@require_tenant_type(['school'])
+def mobile_sell_separately(request, schema_name):
+    """Mobile version of sell separately page."""
+    return sell_separately(request, schema_name, mobile=True)
