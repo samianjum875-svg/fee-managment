@@ -734,13 +734,7 @@
         const desc = this.dataset.desc || '';
         document.getElementById('editCatId').value = id;
         document.getElementById('newCatName').value = name;
-        // We don't have description field in add form, but we can add hidden or just ignore.
-        // We'll let the user edit name only.
         document.getElementById('addCatBtn').textContent = 'Update';
-        // The form action will add category, but we need to pass category_id
-        // The add_category view handles both add and edit.
-        // We'll set a hidden input for description? Not needed.
-        // We'll also need to reset after submit. But since page reloads, it's fine.
       });
     });
 
@@ -805,9 +799,6 @@
 
     // Initial filter (in case of default)
     filterProducts();
-
-    // When editing a category, we need to ensure the category modal doesn't close on form submit
-    // It's fine because page reloads.
 
   })();
 </script>

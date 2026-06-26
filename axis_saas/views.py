@@ -2561,6 +2561,10 @@ def add_category(request, schema_name):
         description = request.POST.get('description', '').strip()
         if not name:
             messages.error(request, "Category name is required")
+            if is_mobile_user_agent(request):
+
+                return redirect('mobile_stock_management', schema_name=schema_name)
+
             return redirect('stock_management', schema_name=schema_name)
 
         with schema_context(schema_name):
@@ -2593,6 +2597,10 @@ def delete_category(request, schema_name, category_id):
         else:
             category.delete()
             messages.success(request, f"Category '{category.name}' deleted.")
+    if is_mobile_user_agent(request):
+
+        return redirect('mobile_stock_management', schema_name=schema_name)
+
     return redirect('stock_management', schema_name=schema_name)
 
 
@@ -2616,6 +2624,10 @@ def add_product(request, schema_name):
 
         if not name or not category_id or not selling_price:
             messages.error(request, "Category, Name, and Selling Price are required.")
+            if is_mobile_user_agent(request):
+
+                return redirect('mobile_stock_management', schema_name=schema_name)
+
             return redirect('stock_management', schema_name=schema_name)
 
         try:
@@ -2661,6 +2673,10 @@ def delete_product(request, schema_name, product_id):
         product = get_object_or_404(Product, id=product_id)
         product.delete()
         messages.success(request, f"Product '{product.name}' deleted.")
+    if is_mobile_user_agent(request):
+
+        return redirect('mobile_stock_management', schema_name=schema_name)
+
     return redirect('stock_management', schema_name=schema_name)
 
 
