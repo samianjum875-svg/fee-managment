@@ -169,6 +169,11 @@ def mobile_more(request, schema_name):
     tenant = get_tenant(request, schema_name)
     return render(request, 'mobile/more.html', {'tenant': tenant})
 
+@require_tenant_type(['school'])
+@require_school_feature('fee_collection')
+def mobile_fee_collection(request, schema_name, student_id=None):
+    return fee_collection(request, schema_name, student_id, force_mobile=True)
+
 def get_student_list_context(request, schema_name):
     tenant = get_tenant(request, schema_name)
     query = request.GET.get('q', '')
@@ -328,7 +333,14 @@ def mobile_student_profile(request, schema_name, student_id):
     return render(request, 'mobile/student_profile.html', context)
 
 @require_tenant_type(['school'])
-def fee_receipt(request, schema_name, receipt_id):
+@require_school_feature('fee_collection')
+def mobile_fee_receipt(request, schema_name, receipt_id):
+    return fee_receipt(request, schema_name, receipt_id, force_mobile=True)
+
+@require_tenant_type(['school'])
+def fee_receipt(request, schema_name, receipt_id, force_mobile=False):
+    if is_mobile_user_agent(request) and not force_mobile:
+        return redirect('mobile_fee_receipt', schema_name=schema_name, receipt_id=receipt_id)
     tenant = get_tenant(request, schema_name)
     with schema_context(schema_name):
         payment = get_object_or_404(PaymentTransaction.objects.select_related('student'), id=receipt_id)
@@ -614,9 +626,13 @@ def reports(request, schema_name):
 
 @require_tenant_type(['school'])
 @require_school_feature('fee_collection')
-def fee_collection(request, schema_name, student_id=None):
+def fee_collection(request, schema_name, student_id=None, force_mobile=False):
+    if is_mobile_user_agent(request) and not force_mobile:
+        if student_id is not None:
+            return redirect('mobile_fee_collection', schema_name=schema_name, student_id=student_id)
+        return redirect('mobile_fee_collection', schema_name=schema_name)
     tenant = get_tenant(request, schema_name)
-    mobile_mode = is_mobile_user_agent(request)
+    mobile_mode = force_mobile or is_mobile_user_agent(request)
     with schema_context(schema_name):
         # Handle POST payment (works for both list and student views)
         if request.method == 'POST':
