@@ -1,18 +1,16 @@
 #!/usr/bin/env python3
 """
-Final patcher for mobile student profile:
-- Premium UI/UX (SVG icons, modern cards, modals)
-- Inline edit modal (no page reload)
-- Transcript modal (full fee/payment history)
-- Edit view redirect fix for mobile
-Run: python3 patch_profile_final.py
+Premium Mobile Student Profile Patcher
+Replaces templates/mobile/student_profile.html with a premium UI/UX.
+Also ensures edit_student view redirects back to mobile profile.
+Run: python3 patch_premium_profile.py
 """
 
 import os
 import re
 
 # ============================================================
-# 1. NEW TEMPLATE CONTENT (mobile/student_profile.html)
+# 1. NEW TEMPLATE CONTENT – Premium Design
 # ============================================================
 NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
 {% load fee_extras %}
@@ -21,9 +19,16 @@ NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
 {% block extra_head %}
 <style>
   /* ---------- Premium Profile Styles ---------- */
+  :root {
+    --profile-gradient-start: #1e293b;
+    --profile-gradient-end: #0f172a;
+    --card-radius: 20px;
+    --card-shadow: 0 8px 24px rgba(0,0,0,0.06);
+  }
+
   .profile-hero {
-    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-    border-radius: 24px;
+    background: linear-gradient(145deg, var(--profile-gradient-start), var(--profile-gradient-end));
+    border-radius: var(--card-radius);
     padding: 24px 20px 20px;
     margin-bottom: 20px;
     color: white;
@@ -33,27 +38,28 @@ NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
   .profile-hero::after {
     content: '';
     position: absolute;
-    top: -40%;
-    right: -20%;
+    top: -30%;
+    right: -10%;
     width: 200px;
     height: 200px;
-    background: rgba(59, 130, 246, 0.15);
+    background: radial-gradient(circle, rgba(59,130,246,0.15) 0%, transparent 70%);
     border-radius: 50%;
+    pointer-events: none;
   }
   .profile-avatar {
-    width: 72px;
-    height: 72px;
+    width: 76px;
+    height: 76px;
     border-radius: 50%;
     background: linear-gradient(135deg, #3b82f6, #8b5cf6);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 28px;
+    font-size: 30px;
     font-weight: 700;
     color: white;
     flex-shrink: 0;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-    border: 3px solid rgba(255,255,255,0.2);
+    box-shadow: 0 12px 28px rgba(0,0,0,0.3);
+    border: 3px solid rgba(255,255,255,0.15);
   }
   .profile-hero-content {
     display: flex;
@@ -63,38 +69,42 @@ NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
     z-index: 2;
   }
   .profile-hero-text h1 {
-    font-size: 1.4rem;
+    font-size: 1.5rem;
     font-weight: 700;
     margin: 0;
     line-height: 1.2;
+    letter-spacing: -0.02em;
   }
   .profile-hero-text .sub {
-    font-size: 0.85rem;
-    opacity: 0.8;
-    margin-top: 2px;
+    font-size: 0.9rem;
+    opacity: 0.85;
+    margin-top: 4px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
   }
   .profile-hero-text .sub span {
-    margin: 0 4px;
+    margin: 0 2px;
   }
   .profile-actions {
     display: flex;
     gap: 10px;
-    margin-top: 16px;
+    margin-top: 18px;
     position: relative;
     z-index: 2;
   }
   .profile-actions a,
   .profile-actions button {
     flex: 1;
-    padding: 12px 8px;
+    padding: 12px 10px;
     border-radius: 14px;
     font-weight: 600;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     text-align: center;
     text-decoration: none;
     border: none;
     cursor: pointer;
-    transition: 0.2s;
+    transition: all 0.2s;
     background: rgba(255,255,255,0.12);
     color: white;
     backdrop-filter: blur(4px);
@@ -102,23 +112,23 @@ NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 8px;
   }
   .profile-actions .btn-primary {
     background: #3b82f6;
     border: none;
     color: white;
-    box-shadow: 0 4px 12px rgba(59,130,246,0.4);
+    box-shadow: 0 6px 16px rgba(59,130,246,0.35);
   }
-  .profile-actions .btn-primary:hover { background: #2563eb; }
+  .profile-actions .btn-primary:hover { background: #2563eb; transform: translateY(-2px); }
   .profile-actions .btn-secondary {
     background: rgba(255,255,255,0.08);
     border: 1px solid rgba(255,255,255,0.15);
     color: white;
   }
-  .profile-actions .btn-secondary:hover { background: rgba(255,255,255,0.2); }
+  .profile-actions .btn-secondary:hover { background: rgba(255,255,255,0.2); transform: translateY(-2px); }
 
-  /* Stats cards */
+  /* Stats Cards */
   .stats-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -126,17 +136,18 @@ NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
     margin-bottom: 20px;
   }
   .stat-card {
-    background: var(--card-bg);
+    background: var(--surface);
     border-radius: 18px;
     padding: 16px 14px;
-    box-shadow: var(--shadow);
-    border: 1px solid rgba(148,163,184,0.10);
-    transition: 0.2s;
+    box-shadow: var(--card-shadow);
+    border: 1px solid rgba(148,163,184,0.08);
+    transition: transform 0.2s;
   }
+  .stat-card:active { transform: scale(0.97); }
   .stat-card .label {
     font-size: 0.7rem;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.3px;
     color: var(--text-muted);
     display: flex;
     align-items: center;
@@ -146,14 +157,16 @@ NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
     width: 16px;
     height: 16px;
     stroke: var(--text-muted);
+    stroke-width: 1.8;
   }
   .stat-card .value {
-    font-size: 1.3rem;
+    font-size: 1.4rem;
     font-weight: 700;
-    margin-top: 4px;
+    margin-top: 6px;
+    color: var(--text);
   }
 
-  /* Info grid */
+  /* Info Grid */
   .info-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -161,14 +174,14 @@ NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
     margin-bottom: 20px;
   }
   .info-item {
-    background: var(--card-bg);
+    background: var(--surface);
     border-radius: 16px;
     padding: 14px 12px;
     border: 1px solid rgba(148,163,184,0.08);
-    box-shadow: var(--shadow);
+    box-shadow: var(--card-shadow);
   }
   .info-item .label {
-    font-size: 0.65rem;
+    font-size: 0.6rem;
     text-transform: uppercase;
     letter-spacing: 0.4px;
     color: var(--text-muted);
@@ -176,15 +189,16 @@ NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
   .info-item .value {
     font-weight: 600;
     font-size: 0.95rem;
-    margin-top: 2px;
+    margin-top: 4px;
+    color: var(--text);
   }
 
-  /* Section titles */
+  /* Section Titles */
   .section-title {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin: 20px 0 12px;
+    margin: 22px 0 12px;
   }
   .section-title h2 {
     font-size: 1rem;
@@ -192,31 +206,37 @@ NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
     margin: 0;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
+    color: var(--text);
   }
   .section-title h2 svg {
-    width: 18px;
-    height: 18px;
+    width: 20px;
+    height: 20px;
+    stroke: var(--primary);
   }
-  .section-title a {
-    color: var(--accent, #3b82f6);
+  .section-title a,
+  .section-title .link-btn {
+    color: var(--primary);
     font-weight: 600;
     font-size: 0.85rem;
     text-decoration: none;
+    background: none;
+    border: none;
+    cursor: pointer;
   }
 
-  /* History list */
+  /* History Lists */
   .history-list {
     display: flex;
     flex-direction: column;
     gap: 10px;
   }
   .history-item {
-    background: var(--card-bg);
+    background: var(--surface);
     border-radius: 16px;
     padding: 14px 16px;
     border: 1px solid rgba(148,163,184,0.08);
-    box-shadow: var(--shadow);
+    box-shadow: var(--card-shadow);
     transition: 0.2s;
   }
   .history-item .item-head {
@@ -236,30 +256,38 @@ NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
   .history-item .item-amount {
     font-weight: 700;
     font-size: 1rem;
+    color: var(--primary);
   }
 
+  /* Status Badges */
   .status-badge {
     display: inline-block;
     padding: 4px 12px;
     border-radius: 999px;
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     font-weight: 700;
     letter-spacing: 0.3px;
+    text-transform: uppercase;
   }
   .status-pending { background: #fef3c7; color: #92400e; }
   .status-partial { background: #dbeafe; color: #1e40af; }
   .status-paid { background: #dcfce7; color: #166534; }
   .status-overdue { background: #fee2e2; color: #991b1b; }
 
-  /* Empty state */
+  /* Empty State */
   .empty-state {
     text-align: center;
     padding: 24px 16px;
     color: var(--text-muted);
     font-size: 0.9rem;
   }
+  .empty-state small {
+    display: block;
+    margin-top: 4px;
+    font-size: 0.8rem;
+  }
 
-  /* ---------- MODAL OVERLAY ---------- */
+  /* ---------- MODAL STYLES ---------- */
   .modal-overlay {
     position: fixed;
     top: 0;
@@ -272,6 +300,7 @@ NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
     justify-content: center;
     z-index: 999;
     backdrop-filter: blur(4px);
+    padding: 16px;
   }
   .modal-overlay.active {
     display: flex;
@@ -279,12 +308,12 @@ NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
   .modal-box {
     background: var(--surface);
     border-radius: 24px;
-    max-width: 500px;
-    width: 95%;
+    max-width: 520px;
+    width: 100%;
     max-height: 90vh;
     overflow-y: auto;
     padding: 24px 20px;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    box-shadow: 0 24px 64px rgba(0,0,0,0.25);
     position: relative;
   }
   .modal-box .modal-close {
@@ -293,32 +322,43 @@ NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
     right: 16px;
     background: none;
     border: none;
-    font-size: 1.8rem;
+    font-size: 1.6rem;
     cursor: pointer;
     color: var(--text-muted);
+    line-height: 1;
   }
   .modal-box h2 {
     margin-top: 0;
     font-size: 1.4rem;
     font-weight: 700;
+    color: var(--text);
   }
   .modal-box .form-group {
-    margin-bottom: 14px;
+    margin-bottom: 16px;
   }
   .modal-box .form-group label {
     display: block;
     font-weight: 600;
     font-size: 0.85rem;
     margin-bottom: 4px;
+    color: var(--text);
   }
   .modal-box .form-group input,
   .modal-box .form-group select {
     width: 100%;
     padding: 10px 12px;
-    border-radius: 10px;
+    border-radius: 12px;
     border: 1px solid var(--border);
     background: var(--surface-alt);
     font-size: 0.95rem;
+    color: var(--text);
+    transition: border 0.2s;
+  }
+  .modal-box .form-group input:focus,
+  .modal-box .form-group select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
   }
   .modal-box .form-actions {
     display: flex;
@@ -333,23 +373,26 @@ NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
     font-weight: 600;
     border: none;
     cursor: pointer;
+    font-size: 0.9rem;
   }
   .modal-box .btn-primary {
     background: var(--primary);
     color: white;
+    box-shadow: 0 4px 12px rgba(59,130,246,0.25);
   }
+  .modal-box .btn-primary:hover { background: var(--primary-dark); }
   .modal-box .btn-secondary {
     background: var(--surface-alt);
     color: var(--text);
     border: 1px solid var(--border);
   }
 
-  /* Transcript table inside modal */
+  /* Transcript Table */
   .transcript-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.85rem;
-    margin: 10px 0;
+    margin: 12px 0;
   }
   .transcript-table th,
   .transcript-table td {
@@ -362,24 +405,45 @@ NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
     font-weight: 600;
     font-size: 0.7rem;
     text-transform: uppercase;
-    color: var(--muted);
+    color: var(--text-muted);
   }
   .transcript-total {
     font-weight: 700;
-    margin-top: 10px;
+    margin-top: 12px;
     text-align: right;
+    color: var(--text);
+  }
+
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 24px;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.9rem;
+  }
+  .back-link svg {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
   }
 </style>
 {% endblock %}
 
 {% block body %}
+<!-- ====== HERO ====== -->
 <div class="profile-hero">
   <div class="profile-hero-content">
     <div class="profile-avatar">{{ student.name|slice:":1"|upper }}</div>
     <div class="profile-hero-text">
       <h1>{{ student.name }}</h1>
       <div class="sub">
-        {{ student.grade }} <span>•</span> {{ student.section }} <span>•</span> Roll {{ student.roll_number }}
+        <span>{{ student.grade }}</span>
+        <span>•</span>
+        <span>{{ student.section }}</span>
+        <span>•</span>
+        <span>Roll {{ student.roll_number }}</span>
       </div>
     </div>
   </div>
@@ -388,7 +452,7 @@ NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z"/>
       </svg>
-      Collect Fee
+      Collect
     </a>
     <button class="btn-secondary" id="editProfileBtn">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -400,11 +464,11 @@ NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
   </div>
 </div>
 
-<!-- Stats -->
+<!-- ====== STATS ====== -->
 <div class="stats-grid">
   <div class="stat-card">
     <div class="label">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
         <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
         <path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/>
       </svg>
@@ -414,7 +478,7 @@ NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
   </div>
   <div class="stat-card">
     <div class="label">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
         <path d="M20 6L9 17l-5-5"/>
       </svg>
       Paid
@@ -423,7 +487,7 @@ NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
   </div>
   <div class="stat-card">
     <div class="label">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
         <circle cx="12" cy="12" r="10"/>
         <path d="M12 6v6l4 2"/>
       </svg>
@@ -433,7 +497,7 @@ NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
   </div>
   <div class="stat-card">
     <div class="label">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
         <path d="M20 7h-4.18A3 3 0 0016 5.18V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v1.18A3 3 0 008.18 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/>
         <path d="M12 12v4m-2-2h4"/>
       </svg>
@@ -443,7 +507,7 @@ NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
   </div>
 </div>
 
-<!-- Personal Info -->
+<!-- ====== PERSONAL INFO ====== -->
 <div class="info-grid">
   <div class="info-item">
     <div class="label">Father</div>
@@ -463,7 +527,7 @@ NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
   </div>
 </div>
 
-<!-- Fee Records -->
+<!-- ====== FEE RECORDS ====== -->
 <div class="section-title">
   <h2>
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -488,11 +552,11 @@ NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
       </div>
     {% endfor %}
   {% else %}
-    <div class="empty-state">No fee records yet. <br><small>Use "Collect Fee" to add current month fee.</small></div>
+    <div class="empty-state">No fee records yet.<small>Use "Collect Fee" to add current month fee.</small></div>
   {% endif %}
 </div>
 
-<!-- Payment History -->
+<!-- ====== PAYMENT HISTORY ====== -->
 <div class="section-title">
   <h2>
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -501,9 +565,7 @@ NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
     </svg>
     Payment History
   </h2>
-  <button id="viewTranscriptBtn" class="link-btn" style="background:none; border:none; color:var(--accent, #3b82f6); font-weight:600; font-size:0.85rem; cursor:pointer;">
-    View Transcript
-  </button>
+  <button class="link-btn" id="viewTranscriptBtn">View Transcript</button>
 </div>
 <div class="history-list">
   {% if payments %}
@@ -523,15 +585,13 @@ NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
   {% endif %}
 </div>
 
-<!-- Back button -->
-<div style="margin-top: 24px; text-align: center;">
-  <a href="{% url 'mobile_student_list' schema_name=tenant.schema_name %}" style="color: var(--text-muted); text-decoration: none; font-size: 0.9rem; display: inline-flex; align-items: center; gap: 4px;">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M15 18l-6-6 6-6"/>
-    </svg>
-    Back to Students
-  </a>
-</div>
+<!-- Back Link -->
+<a href="{% url 'mobile_student_list' schema_name=tenant.schema_name %}" class="back-link">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M15 18l-6-6 6-6"/>
+  </svg>
+  Back to Students
+</a>
 
 <!-- ========== EDIT MODAL ========== -->
 <div id="editModal" class="modal-overlay">
@@ -589,10 +649,11 @@ NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
   <div class="modal-box" style="max-width: 700px;">
     <button class="modal-close" id="closeTranscriptModal">&times;</button>
     <h2>Fee Transcript – {{ student.name }}</h2>
-    <div style="margin-bottom: 10px; font-size:0.85rem; color:var(--muted);">
+    <div style="margin-bottom: 12px; font-size:0.85rem; color:var(--text-muted);">
       {{ student.grade }} • Roll {{ student.roll_number }}
     </div>
-    <h3 style="margin: 16px 0 8px;">Fee Records</h3>
+
+    <h3 style="margin: 16px 0 8px; font-size:1rem;">Fee Records</h3>
     <table class="transcript-table">
       <thead>
         <tr><th>Month/Year</th><th>Amount</th><th>Paid</th><th>Status</th></tr>
@@ -610,7 +671,8 @@ NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
         {% endfor %}
       </tbody>
     </table>
-    <h3 style="margin: 16px 0 8px;">Payment History</h3>
+
+    <h3 style="margin: 16px 0 8px; font-size:1rem;">Payment History</h3>
     <table class="transcript-table">
       <thead>
         <tr><th>Date</th><th>Amount</th><th>Mode</th><th>Remaining</th></tr>
@@ -628,6 +690,7 @@ NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
         {% endfor %}
       </tbody>
     </table>
+
     <div class="transcript-total">
       Total Paid: ₹{{ total_paid|floatformat:2 }} &nbsp;|&nbsp; Total Pending: ₹{{ pending_total|floatformat:2 }}
     </div>
@@ -658,7 +721,7 @@ NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
       if (e.target === this) closeEditModal();
     });
 
-    // Submit edit form via AJAX to avoid full page reload
+    // Submit edit form via AJAX (no page reload)
     const editForm = document.getElementById('editForm');
     editForm.addEventListener('submit', async function(e) {
       e.preventDefault();
@@ -671,8 +734,7 @@ NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
           headers: { 'X-Requested-With': 'XMLHttpRequest' },
         });
         if (resp.ok) {
-          // Reload the page to reflect changes (or we could update fields dynamically)
-          window.location.reload();
+          window.location.reload(); // Refresh to show updated data
         } else {
           const text = await resp.text();
           alert('Error updating student: ' + text);
@@ -684,16 +746,16 @@ NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
 
     // ---- Transcript Modal ----
     const transcriptModal = document.getElementById('transcriptModal');
-    const viewTranscriptBtn = document.getElementById('viewTranscriptBtn');
+    const viewBtn = document.getElementById('viewTranscriptBtn');
     const closeTranscript = document.getElementById('closeTranscriptModal');
 
-    function openTranscriptModal() {
+    function openTranscript() {
       transcriptModal.classList.add('active');
     }
     function closeTranscriptModal() {
       transcriptModal.classList.remove('active');
     }
-    viewTranscriptBtn.addEventListener('click', openTranscriptModal);
+    viewBtn.addEventListener('click', openTranscript);
     closeTranscript.addEventListener('click', closeTranscriptModal);
     transcriptModal.addEventListener('click', function(e) {
       if (e.target === this) closeTranscriptModal();
@@ -710,53 +772,36 @@ NEW_TEMPLATE = """{% extends 'mobile/base.html' %}
 """
 
 # ============================================================
-# 2. PATCH VIEWS.PY – redirect to mobile profile on mobile
+# 2. PATCH VIEWS.PY – ensure edit redirects to mobile profile
 # ============================================================
-VIEWS_PATCH = """
-# ---------- PATCH: Redirect to mobile profile from edit_student ----------
-# Find the edit_student function and modify redirect
-def edit_student(request, schema_name, student_id):
-    tenant = get_tenant(request, schema_name)
-    with schema_context(schema_name):
-        student = get_object_or_404(Student, id=student_id)
-        if request.method == "POST":
-            form = StudentForm(request.POST, instance=student)
-            if form.is_valid():
-                form.save()
-                messages.success(request, f"Student {student.name} updated successfully.")
-                # Redirect to mobile profile if mobile user agent
-                if is_mobile_user_agent(request):
-                    return redirect('mobile_student_profile', schema_name=schema_name, student_id=student.id)
-                return redirect("student_profile", schema_name=schema_name, student_id=student.id)
-        else:
-            form = StudentForm(instance=student)
-        grades = FeeStructure.objects.values_list("grade", flat=True).distinct()
-        context = {
-            "tenant": tenant, "form": form, "student": student, "grades": grades,
-            "logo_url": tenant.school_logo.url if tenant.school_logo else None,
-        }
-    return render(request, "tenant/student_form.html", context)
-"""
-
 def patch_views():
     views_path = "axis_saas/views.py"
     if not os.path.exists(views_path):
-        print(f"❌ Error: {views_path} not found.")
+        print(f"⚠️ {views_path} not found. Skipping views patch.")
         return
 
     with open(views_path, "r") as f:
         content = f.read()
 
-    # Replace the edit_student function block
-    # Find the existing edit_student definition
-    pattern = r"def edit_student\(request, schema_name, student_id\):.*?(?=\n@|\ndef |\Z)"
-    match = re.search(pattern, content, re.DOTALL)
-    if match:
-        old_func = match.group(0)
-        # Replace with our patched version
-        # We'll use the VIEWS_PATCH content but we need to ensure indentation matches
-        # The VIEWS_PATCH is a block of code; we can just replace the whole function
-        new_func = """def edit_student(request, schema_name, student_id):
+    # Check if the edit_student function already has the mobile redirect
+    # If not, patch it.
+    # We'll look for the existing edit_student definition and replace if needed.
+    # We'll use regex to find the function and replace the redirect part.
+    # But we already have the correct version in the file (as shown in the user's output).
+    # So we might not need to patch, but we'll ensure it's there.
+    # The user's views.py already has:
+    # if is_mobile_user_agent(request):
+    #     return redirect('mobile_student_profile', schema_name=schema_name, student_id=student.id)
+    # So we can skip patching to avoid duplication.
+
+    # But we'll add a check and only patch if missing.
+    if "redirect('mobile_student_profile'" not in content:
+        # Find the edit_student function and replace
+        pattern = r"def edit_student\(request, schema_name, student_id\):.*?(?=\n@|\ndef |\Z)"
+        match = re.search(pattern, content, re.DOTALL)
+        if match:
+            old_func = match.group(0)
+            new_func = """def edit_student(request, schema_name, student_id):
     tenant = get_tenant(request, schema_name)
     with schema_context(schema_name):
         student = get_object_or_404(Student, id=student_id)
@@ -777,13 +822,15 @@ def patch_views():
             "logo_url": tenant.school_logo.url if tenant.school_logo else None,
         }
     return render(request, "tenant/student_form.html", context)"""
-        # Replace with new function
-        content = content.replace(old_func, new_func)
-        with open(views_path, "w") as f:
-            f.write(content)
-        print("✅ Patched views.py: edit_student now redirects to mobile profile on mobile.")
+            content = content.replace(old_func, new_func)
+            with open(views_path, "w") as f:
+                f.write(content)
+            print("✅ Patched views.py: edit_student now redirects to mobile profile on mobile.")
+        else:
+            print("⚠️ Could not find edit_student function in views.py.")
     else:
-        print("⚠️ Could not find edit_student function in views.py. Skipping patch.")
+        print("✅ views.py already has mobile redirect for edit_student.")
+
 
 # ============================================================
 # 3. MAIN
@@ -791,19 +838,18 @@ def patch_views():
 def main():
     # Write new template
     template_path = "templates/mobile/student_profile.html"
-    if not os.path.exists(os.path.dirname(template_path)):
-        os.makedirs(os.path.dirname(template_path))
+    os.makedirs(os.path.dirname(template_path), exist_ok=True)
     with open(template_path, "w", encoding="utf-8") as f:
         f.write(NEW_TEMPLATE)
-    print("✅ Updated templates/mobile/student_profile.html with premium design, edit modal, and transcript modal.")
+    print("✅ Updated templates/mobile/student_profile.html with premium design.")
 
-    # Patch views
+    # Patch views (if needed)
     patch_views()
 
-    print("\n🎉 All changes applied. Restart your server to see the new mobile student profile.")
-    print("   - Edit modal opens inline (no navigation).")
-    print("   - Transcript modal shows all fee/payment history.")
-    print("   - Edit button now redirects back to mobile profile after saving.")
+    print("\n🎉 Premium profile applied. Restart your server to see the new design.")
+    print("   - Modern hero, stats cards, and clean typography.")
+    print("   - Edit modal and transcript modal included.")
+    print("   - All icons are SVG, no emojis.")
 
 if __name__ == "__main__":
     main()
