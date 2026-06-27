@@ -1015,7 +1015,7 @@ def mobile_fee_structure(request, schema_name):
 
 @require_tenant_type(['school'])
 @require_school_feature('fee_settings')
-def fee_settings(request, schema_name):
+def fee_settings(request, schema_name, force_mobile=False):
     tenant = get_tenant(request, schema_name)
     with schema_context(schema_name):
         settings_obj, created = SchoolFeeSettings.objects.get_or_create(pk=1)
@@ -1028,7 +1028,8 @@ def fee_settings(request, schema_name):
         else:
             form = FeeSettingsForm(instance=settings_obj)
     context = {'tenant': tenant, 'form': form, 'logo_url': tenant.school_logo.url if tenant.school_logo else None}
-    return render(request, 'tenant/fee_settings.html', context)
+    template = 'mobile/fee_settings.html' if force_mobile else 'tenant/fee_settings.html'
+    return render(request, template, context)
 
 # ------------------- Family Payment -------------------
 @require_tenant_type(['school'])
@@ -2871,3 +2872,11 @@ def mobile_defaulters(request, schema_name):
 def mobile_reports(request, schema_name):
     """Mobile version of reports page."""
     return reports(request, schema_name, force_mobile=True)
+
+
+# ------------------- Mobile Fee Settings -------------------
+@require_tenant_type(['school'])
+@require_school_feature('fee_settings')
+def mobile_fee_settings(request, schema_name):
+    """Mobile version of fee settings page."""
+    return fee_settings(request, schema_name, force_mobile=True)

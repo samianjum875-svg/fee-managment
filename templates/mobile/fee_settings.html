@@ -1,0 +1,402 @@
+{% extends 'mobile/base.html' %}
+{% load static %}
+{% block title %}Fee Settings | {{ tenant.name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* ===== Page Header ===== */
+  .page-header {
+    margin-bottom: 1rem;
+  }
+  .page-title {
+    font-size: 1.6rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    margin-bottom: 0.1rem;
+  }
+  .page-desc {
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+
+  /* ===== Form Card ===== */
+  .form-card {
+    background: rgba(255,255,255,0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 1.5rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border: 1px solid rgba(255,255,255,0.6);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.04);
+  }
+  .form-card .card-title {
+    font-size: 1rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+  .form-card .card-title svg {
+    color: var(--primary);
+  }
+
+  .form-group {
+    margin-bottom: 1rem;
+  }
+  .form-group label {
+    display: block;
+    font-weight: 600;
+    font-size: 0.8rem;
+    margin-bottom: 0.25rem;
+    color: var(--text);
+  }
+  .form-group .input-with-icon {
+    position: relative;
+  }
+  .form-group .input-with-icon svg {
+    position: absolute;
+    left: 0.6rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+    width: 16px;
+    height: 16px;
+  }
+  .form-group input,
+  .form-group select {
+    width: 100%;
+    padding: 0.6rem 0.6rem 0.6rem 2rem;
+    border-radius: 0.75rem;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.9rem;
+    transition: border-color 0.2s;
+  }
+  .form-group input:focus,
+  .form-group select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+  }
+  .form-group .help-text {
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-top: 0.2rem;
+  }
+
+  .form-actions {
+    margin-top: 0.5rem;
+    text-align: right;
+  }
+  .btn-primary {
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 2rem;
+    padding: 0.5rem 1.2rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s;
+  }
+  .btn-primary:hover {
+    background: var(--primary-dark);
+    transform: translateY(-1px);
+  }
+
+  /* ===== Status Card ===== */
+  .status-card {
+    background: rgba(255,255,255,0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 1.5rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border: 1px solid rgba(255,255,255,0.6);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.04);
+  }
+  .status-card .card-title {
+    font-size: 1rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+  .status-card .card-title svg {
+    color: var(--primary);
+  }
+  .status-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+    text-align: center;
+  }
+  .status-item {
+    background: var(--surface-alt);
+    border-radius: 0.75rem;
+    padding: 0.5rem 0.25rem;
+  }
+  .status-item .label {
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    color: var(--muted);
+    letter-spacing: 0.3px;
+  }
+  .status-item .value {
+    font-size: 0.9rem;
+    font-weight: 700;
+    margin-top: 0.1rem;
+    color: var(--text);
+  }
+  .status-item .value.active {
+    color: var(--success);
+  }
+  .status-item .value.idle {
+    color: var(--danger);
+  }
+
+  .action-btn {
+    margin-top: 0.75rem;
+    text-align: center;
+  }
+  .btn-secondary {
+    background: var(--surface-alt);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 2rem;
+    padding: 0.5rem 1.2rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s;
+  }
+  .btn-secondary:hover {
+    background: var(--surface);
+  }
+
+  /* ===== Info Card ===== */
+  .info-card {
+    background: rgba(255,255,255,0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 1.5rem;
+    padding: 1rem;
+    border: 1px solid rgba(255,255,255,0.6);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.04);
+  }
+  .info-card .info-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+  .info-card ul {
+    margin: 0;
+    padding-left: 1.2rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+  .info-card ul li {
+    margin-bottom: 0.4rem;
+  }
+
+  .bottom-spacer {
+    height: 80px;
+  }
+
+  @media (max-width: 480px) {
+    .status-grid {
+      grid-template-columns: 1fr;
+    }
+    .form-actions {
+      text-align: center;
+    }
+    .btn-primary, .btn-secondary {
+      width: 100%;
+      justify-content: center;
+    }
+    .status-item .value {
+      font-size: 0.8rem;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="page-header">
+  <h1 class="page-title">Fee Automation</h1>
+  <p class="page-desc">Configure monthly fee generation and late fee rules</p>
+</div>
+
+<!-- ===== Form Card ===== -->
+<div class="form-card">
+  <div class="card-title">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+      <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+      <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+    </svg>
+    <span>Generation Rules</span>
+  </div>
+  <form method="post" id="settingsForm">
+    {% csrf_token %}
+    <div class="form-group">
+      <label for="id_fee_generation_day">Generation Day of Month</label>
+      <div class="input-with-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 12h3l3-9 3 18 3-9h3"/></svg>
+        {{ form.fee_generation_day }}
+      </div>
+      <div class="help-text">Fees will be created automatically on this day every month.</div>
+    </div>
+    <div class="form-group">
+      <label for="id_due_date_offset">Due Date Offset (days after generation)</label>
+      <div class="input-with-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        {{ form.due_date_offset }}
+      </div>
+      <div class="help-text">Number of days after generation when fee becomes due.</div>
+    </div>
+    <div class="form-group">
+      <label for="id_late_fee_penalty">Late Fee Penalty (%)</label>
+      <div class="input-with-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+        {{ form.late_fee_penalty }}
+      </div>
+      <div class="help-text">Percentage added to overdue fees after due date.</div>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn-primary">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 13l4 4L19 7"/></svg>
+        Save Settings
+      </button>
+    </div>
+  </form>
+</div>
+
+<!-- ===== Status Card ===== -->
+<div class="status-card">
+  <div class="card-title">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+      <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+    </svg>
+    <span>Automation Status</span>
+  </div>
+  <div class="status-grid">
+    <div class="status-item">
+      <div class="label">Last Generation</div>
+      <div class="value" id="lastGen">—</div>
+    </div>
+    <div class="status-item">
+      <div class="label">Next Generation</div>
+      <div class="value" id="nextGen">—</div>
+    </div>
+    <div class="status-item">
+      <div class="label">Status</div>
+      <div class="value" id="genStatus">Loading...</div>
+    </div>
+  </div>
+  <div class="action-btn">
+    <button class="btn-secondary" id="manualGenBtn">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+      Run Manual Generation
+    </button>
+    <div class="help-text" style="margin-top:0.5rem; text-align:center;">Use only if auto‑generation fails. This will create fee records for the current month if missing.</div>
+  </div>
+</div>
+
+<!-- ===== Info Card ===== -->
+<div class="info-card">
+  <div class="info-title">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+    <span>How it works</span>
+  </div>
+  <ul>
+    <li><strong>Automatic Generation:</strong> On the selected day of each month, the system creates fee records for all active students based on their assigned fee structure.</li>
+    <li><strong>Due Date:</strong> Fee becomes due after the configured offset days (e.g., generation on 1st with 15 days offset → due on 16th).</li>
+    <li><strong>Late Fee:</strong> After due date, the penalty percentage is applied to the pending amount automatically.</li>
+    <li><strong>Manual Generation:</strong> Click the button above to force generation for current month (useful for testing or after setup).</li>
+  </ul>
+</div>
+
+<div class="bottom-spacer"></div>
+
+<script>
+  function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+  const csrftoken = getCookie('csrftoken');
+
+  async function fetchStatus() {
+    try {
+      const resp = await fetch('/api/fee-status/');
+      if (!resp.ok) throw new Error('Status fetch failed');
+      const data = await resp.json();
+      document.getElementById('lastGen').innerText = data.last_generation || 'Never';
+      document.getElementById('nextGen').innerText = data.next_generation || 'Not set';
+      const statusEl = document.getElementById('genStatus');
+      if (data.status === 'success') {
+        statusEl.innerHTML = '✅ Active';
+        statusEl.className = 'value active';
+      } else {
+        statusEl.innerHTML = '⚠️ Idle';
+        statusEl.className = 'value idle';
+      }
+    } catch(e) {
+      console.log('Status fetch failed:', e);
+      document.getElementById('genStatus').innerText = 'Error';
+    }
+  }
+  fetchStatus();
+
+  document.getElementById('manualGenBtn').addEventListener('click', async () => {
+    if (!confirm('Generate fees for the current month? This will NOT create duplicate records.')) return;
+    const btn = document.getElementById('manualGenBtn');
+    btn.disabled = true;
+    btn.innerHTML = 'Generating...';
+    try {
+      const resp = await fetch('/api/manual-generate/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrftoken, 'Content-Type': 'application/json' },
+      });
+      const data = await resp.json();
+      if (data.message) {
+        alert(data.message);
+      } else if (data.error) {
+        alert('Error: ' + data.error);
+      }
+      fetchStatus();
+    } catch(e) {
+      console.error('Generation error:', e);
+      alert('Error generating fees: ' + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Run Manual Generation';
+    }
+  });
+</script>
+{% endblock %}
