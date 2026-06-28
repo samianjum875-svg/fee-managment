@@ -1,321 +1,13 @@
 #!/usr/bin/env python3
 """
-AXIS Voucher Final Fix v2 – direct buttons, single card, premium UI.
-Run: python3 fix_voucher_final2.py
+AXIS Voucher – Premium Form UI Fix
+Run: python3 fix_voucher_form_ui.py
 """
 
 import os
 import shutil
 
-# ========== NEW voucher_snippet.html (Premium, single card) ==========
-NEW_VOUCHER_SNIPPET = """{% load static %}
-<div class="voucher-receipt" id="voucherDisplay">
-    <!-- Header: School Name + Voucher # + Status -->
-    <div class="voucher-header">
-        <div class="school-brand">
-            <div class="school-name">{{ tenant.name|default:"School" }}</div>
-            <div class="voucher-meta">
-                <span class="voucher-label">Voucher</span>
-                <span class="voucher-number">#{{ fee_record.id }}</span>
-            </div>
-        </div>
-        <div class="voucher-status">
-            <span class="status-badge status-{{ fee_record.status }}">{{ fee_record.get_status_display }}</span>
-        </div>
-    </div>
-
-    <!-- Student Information -->
-    <div class="student-section">
-        <div class="student-detail">
-            <span class="detail-label">Student</span>
-            <span class="detail-value">{{ student.name }}</span>
-        </div>
-        <div class="student-detail">
-            <span class="detail-label">Roll No.</span>
-            <span class="detail-value">{{ student.roll_number }}</span>
-        </div>
-        <div class="student-detail">
-            <span class="detail-label">Father</span>
-            <span class="detail-value">{{ student.father_name }}</span>
-        </div>
-        <div class="student-detail">
-            <span class="detail-label">Class</span>
-            <span class="detail-value">{{ student.grade }} - {{ student.section }}</span>
-        </div>
-        <div class="student-detail">
-            <span class="detail-label">Admission</span>
-            <span class="detail-value">{{ student.admission_date|date:"d M Y" }}</span>
-        </div>
-        <div class="student-detail">
-            <span class="detail-label">Month</span>
-            <span class="detail-value">{{ fee_record.month }}/{{ fee_record.year }}</span>
-        </div>
-    </div>
-
-    <!-- Fee Details Table -->
-    <div class="fee-table">
-        <table>
-            <thead>
-                <tr>
-                    <th>Description</th>
-                    <th>Amount (₹)</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>Monthly Fee</td>
-                    <td>{{ fee_record.amount|floatformat:2 }}</td>
-                </tr>
-                {% for ch in charges %}
-                <tr>
-                    <td>{{ ch.title }}</td>
-                    <td>{{ ch.amount|floatformat:2 }}</td>
-                </tr>
-                {% endfor %}
-                <tr class="total-row">
-                    <td><strong>Total</strong></td>
-                    <td><strong>{{ total|floatformat:2 }}</strong></td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-
-    <!-- Pending Note (if any) -->
-    {% with pending=fee_record.student.fee_records.aggregate.total %}
-        {% if pending %}
-        <div class="pending-note">
-            <span class="pending-icon">⏳</span>
-            Total pending (including previous months): <strong>₹{{ pending|floatformat:2 }}</strong>
-        </div>
-        {% endif %}
-    {% endwith %}
-
-    <!-- Footer: Dates -->
-    <div class="voucher-footer">
-        <div class="footer-item">
-            <span class="footer-label">Generated</span>
-            <span class="footer-value">{{ fee_record.due_date|date:"d M Y" }}</span>
-        </div>
-        <div class="footer-item">
-            <span class="footer-label">Due Date</span>
-            <span class="footer-value">{{ fee_record.due_date|date:"d M Y" }}</span>
-        </div>
-    </div>
-</div>
-
-<style>
-    /* ----- Premium Voucher – Single Card, Clean ----- */
-    .voucher-receipt {
-        background: #ffffff;
-        border-radius: 1.25rem;
-        padding: 1.5rem;
-        box-shadow: 0 8px 30px rgba(0,0,0,0.06);
-        font-family: system-ui, -apple-system, sans-serif;
-        max-width: 100%;
-        margin: 0 auto;
-        transition: box-shadow 0.2s;
-    }
-    .voucher-receipt:hover {
-        box-shadow: 0 12px 40px rgba(0,0,0,0.08);
-    }
-
-    /* Header – school + voucher # + status */
-    .voucher-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        border-bottom: 2px solid #3b82f6;
-        padding-bottom: 0.6rem;
-        margin-bottom: 0.8rem;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-    }
-    .school-brand {
-        display: flex;
-        align-items: baseline;
-        gap: 0.75rem;
-        flex-wrap: wrap;
-    }
-    .school-name {
-        font-size: 1.15rem;
-        font-weight: 700;
-        color: #1f2937;
-        letter-spacing: -0.02em;
-    }
-    .voucher-meta {
-        display: inline-flex;
-        align-items: baseline;
-        gap: 0.3rem;
-    }
-    .voucher-label {
-        font-size: 0.6rem;
-        text-transform: uppercase;
-        color: #6b7280;
-        letter-spacing: 0.3px;
-    }
-    .voucher-number {
-        font-size: 0.9rem;
-        font-weight: 700;
-        font-family: monospace;
-        color: #1f2937;
-        background: #f3f4f6;
-        padding: 0.1rem 0.5rem;
-        border-radius: 0.4rem;
-    }
-    .voucher-status .status-badge {
-        display: inline-block;
-        padding: 0.2rem 0.6rem;
-        border-radius: 999px;
-        font-size: 0.65rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.3px;
-    }
-    .status-pending { background: #fef3c7; color: #92400e; }
-    .status-partial { background: #dbeafe; color: #1e40af; }
-    .status-paid   { background: #d1fae5; color: #065f46; }
-    .status-overdue { background: #fee2e2; color: #991b1b; }
-    .status-waived { background: #e0e7ff; color: #3730a3; }
-
-    /* Student Section */
-    .student-section {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 0.3rem 1.5rem;
-        background: #f9fafb;
-        padding: 0.6rem 0.9rem;
-        border-radius: 0.75rem;
-        margin-bottom: 0.8rem;
-        border: 1px solid #e5e7eb;
-    }
-    .student-detail {
-        display: flex;
-        justify-content: space-between;
-        border-bottom: 1px dashed #e5e7eb;
-        padding: 0.2rem 0;
-    }
-    .student-detail:last-child {
-        border-bottom: none;
-    }
-    .detail-label {
-        font-size: 0.7rem;
-        color: #6b7280;
-        font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 0.3px;
-    }
-    .detail-value {
-        font-weight: 600;
-        color: #1f2937;
-        font-size: 0.8rem;
-    }
-
-    /* Fee Table */
-    .fee-table table {
-        width: 100%;
-        border-collapse: collapse;
-        margin: 0.3rem 0 0.8rem;
-        font-size: 0.85rem;
-    }
-    .fee-table th {
-        text-align: left;
-        padding: 0.3rem 0.2rem;
-        font-weight: 600;
-        color: #6b7280;
-        border-bottom: 1px solid #e5e7eb;
-        font-size: 0.65rem;
-        text-transform: uppercase;
-        letter-spacing: 0.4px;
-    }
-    .fee-table td {
-        padding: 0.3rem 0.2rem;
-        border-bottom: 1px solid #e5e7eb;
-    }
-    .fee-table td:last-child {
-        text-align: right;
-        font-weight: 500;
-    }
-    .fee-table .total-row td {
-        border-top: 2px solid #3b82f6;
-        font-weight: 700;
-        padding-top: 0.5rem;
-        font-size: 0.95rem;
-    }
-    .fee-table .total-row td:last-child {
-        color: #3b82f6;
-    }
-
-    /* Pending Note */
-    .pending-note {
-        background: #fef9e7;
-        color: #92400e;
-        border-radius: 0.5rem;
-        padding: 0.4rem 0.7rem;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        font-size: 0.8rem;
-        margin: 0.3rem 0 0.8rem;
-        border-left: 4px solid #f59e0b;
-    }
-    .pending-icon {
-        font-size: 1rem;
-    }
-
-    /* Footer */
-    .voucher-footer {
-        display: flex;
-        justify-content: space-between;
-        flex-wrap: wrap;
-        gap: 0.4rem;
-        border-top: 1px solid #e5e7eb;
-        padding-top: 0.6rem;
-        margin-top: 0.3rem;
-        font-size: 0.7rem;
-    }
-    .footer-item {
-        display: flex;
-        gap: 0.3rem;
-    }
-    .footer-label {
-        color: #6b7280;
-        font-weight: 500;
-        text-transform: uppercase;
-        font-size: 0.6rem;
-    }
-    .footer-value {
-        font-weight: 600;
-        color: #1f2937;
-    }
-
-    /* Responsive */
-    @media (max-width: 600px) {
-        .voucher-receipt {
-            padding: 1rem;
-        }
-        .student-section {
-            grid-template-columns: 1fr;
-        }
-        .voucher-header {
-            flex-direction: column;
-            align-items: flex-start;
-        }
-        .voucher-status {
-            align-self: flex-start;
-        }
-        .voucher-footer {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 0.3rem;
-        }
-        .fee-table table {
-            font-size: 0.75rem;
-        }
-    }
-</style>
-"""
-
-# ========== NEW voucher_modal.html (single card, direct buttons) ==========
+# ========== NEW voucher_modal.html (with premium form styles) ==========
 NEW_VOUCHER_MODAL = """<!-- Voucher Modal – Single Card with Direct Buttons -->
 <div id="voucherModal" class="modal" style="display:none;">
     <div class="modal-content" style="max-width: 820px;">
@@ -443,6 +135,122 @@ NEW_VOUCHER_MODAL = """<!-- Voucher Modal – Single Card with Direct Buttons --
         justify-content: center;
     }
 }
+
+/* ===== PREMIUM FORM STYLES ===== */
+.voucher-form {
+    padding: 0.2rem 0;
+}
+.voucher-form .form-group {
+    margin-bottom: 1.2rem;
+}
+.voucher-form .form-group label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: 600;
+    font-size: 0.85rem;
+    margin-bottom: 0.3rem;
+    color: #1f2937;
+}
+.voucher-form .form-group label svg {
+    color: #3b82f6;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+.voucher-form .form-group input,
+.voucher-form .form-group select {
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid #d1d5db;
+    background: #f9fafb;
+    font-size: 0.9rem;
+    transition: border-color 0.2s;
+}
+.voucher-form .form-group input:focus,
+.voucher-form .form-group select:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+}
+.voucher-form .charge-item {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+.voucher-form .charge-item input {
+    flex: 1;
+}
+.voucher-form .charge-item .remove-charge {
+    background: none;
+    border: none;
+    color: #ef4444;
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0 0.2rem;
+    line-height: 1;
+}
+.voucher-form .btn-secondary,
+.voucher-form .btn-primary {
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.9rem;
+}
+.voucher-form .btn-secondary {
+    background: #f3f4f6;
+    color: #1f2937;
+}
+.voucher-form .btn-secondary:hover {
+    background: #e5e7eb;
+}
+.voucher-form .btn-primary {
+    background: #3b82f6;
+    color: white;
+}
+.voucher-form .btn-primary:hover {
+    background: #2563eb;
+}
+.voucher-form .form-actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+    margin-top: 1.2rem;
+}
+.voucher-form .form-actions button {
+    padding: 0.5rem 1.2rem;
+}
+.voucher-form .info-box {
+    background: #f9fafb;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid #e5e7eb;
+    margin-bottom: 0.8rem;
+}
+.voucher-form .info-box strong {
+    color: #1f2937;
+}
+.voucher-form .checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 400;
+    font-size: 0.85rem;
+    color: #1f2937;
+}
+.voucher-form .checkbox-group input[type="checkbox"] {
+    width: 1.1rem;
+    height: 1.1rem;
+    accent-color: #3b82f6;
+}
 </style>
 
 <script>
@@ -481,7 +289,7 @@ function closeVoucherModal() {
 
 function loadVoucherStatus(studentId, schema) {
     const body = document.getElementById('voucherModalBody');
-    body.innerHTML = '<p style="text-align:center; padding:1rem;">Loading...</p>';
+    body.innerHTML = '<p style="text-align:center; padding:1rem; color:#6b7280;">Loading...</p>';
     fetch(`/portal/${schema}/api/student/${studentId}/voucher-status/`)
         .then(res => res.json())
         .then(data => {
@@ -560,7 +368,7 @@ function downloadVoucherImage(element) {
 function showVoucherForm(data, isEdit) {
     const body = document.getElementById('voucherModalBody');
     let html = '<div class="voucher-form">';
-    html += `<div style="display:grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom:1rem; font-size:0.9rem;">
+    html += `<div style="display:grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom:1rem; font-size:0.9rem; background:#f9fafb; padding:0.5rem 0.75rem; border-radius:0.5rem; border:1px solid #e5e7eb;">
                 <div><strong>Student:</strong> ${data.student_name} (${data.student_roll})</div>
                 <div><strong>Class:</strong> ${data.grade} - ${data.section}</div>
             </div>`;
@@ -590,14 +398,12 @@ function showVoucherForm(data, isEdit) {
                 Add Charge
             </button>`;
     html += `</div></div>`;
-    html += `<div class="form-group" style="background:#f9fafb; padding:0.5rem; border-radius:0.5rem;">
+    html += `<div class="info-box">
                 <strong>Total Pending (including this fee):</strong> ₹<span id="voucherTotalPending">${data.total_pending}</span>
             </div>`;
-    html += `<div class="form-group">
-                <label>
-                    <input type="checkbox" id="saveDefaultCharges" ${(data.default_charges && data.default_charges.length) ? 'checked' : ''}>
-                    <span style="font-weight:400;">Save these charges as defaults for this student</span>
-                </label>
+    html += `<div class="form-group checkbox-group">
+                <input type="checkbox" id="saveDefaultCharges" ${(data.default_charges && data.default_charges.length) ? 'checked' : ''}>
+                <label for="saveDefaultCharges" style="font-weight:400; cursor:pointer;">Save these charges as defaults for this student</label>
             </div>`;
     html += `<div class="form-actions">
                 <button type="button" class="btn-secondary" onclick="closeVoucherModal()">
@@ -702,127 +508,20 @@ def patch_file(filepath, new_content):
     print(f"✅ Updated: {filepath}")
 
 
-def patch_view():
-    """Ensure voucher_html_api view fetches tenant correctly."""
-    view_path = "axis_saas/views.py"
-    with open(view_path, "r") as f:
-        content = f.read()
-
-    old_voucher_html = """def voucher_html_api(request, schema_name, student_id):
-    \"\"\"API: Return HTML of the voucher for the current month (or latest if not exists).\"\"\"
-    from django.http import HttpResponse
-    from django.utils import timezone
-    from django.template.loader import render_to_string
-    from .models import Student, FeeRecord
-    from django_tenants.utils import schema_context
-
-    with schema_context(schema_name):
-        try:
-            student = Student.objects.get(id=student_id)
-        except Student.DoesNotExist:
-            return HttpResponse('Student not found', status=404)
-
-        today = timezone.localdate()
-        month, year = today.month, today.year
-        fee_record = FeeRecord.objects.filter(student=student, month=month, year=year).first()
-        if not fee_record:
-            return HttpResponse('No fee record for current month', status=404)
-
-        # Build voucher data (similar to receipt)
-        charges = fee_record.extra_charges or []
-        total = fee_record.amount + sum(Decimal(str(ch['amount'])) for ch in charges)
-        voucher_data = {
-            'student': student,
-            'fee_record': fee_record,
-            'charges': charges,
-            'total': total,
-            'tenant': request.tenant if hasattr(request, 'tenant') else None,
-        }
-        html = render_to_string('tenant/voucher_snippet.html', voucher_data)
-        return HttpResponse(html)"""
-
-    new_voucher_html = """def voucher_html_api(request, schema_name, student_id):
-    \"\"\"API: Return HTML of the voucher for the current month (or latest if not exists).\"\"\"
-    from django.http import HttpResponse
-    from django.utils import timezone
-    from django.template.loader import render_to_string
-    from .models import Student, FeeRecord, SchoolClient
-    from django_tenants.utils import schema_context
-    from decimal import Decimal
-
-    with schema_context(schema_name):
-        try:
-            student = Student.objects.get(id=student_id)
-        except Student.DoesNotExist:
-            return HttpResponse('Student not found', status=404)
-
-        today = timezone.localdate()
-        month, year = today.month, today.year
-        fee_record = FeeRecord.objects.filter(student=student, month=month, year=year).first()
-        if not fee_record:
-            return HttpResponse('No fee record for current month', status=404)
-
-        # Fetch tenant from public schema
-        tenant = None
-        try:
-            with schema_context('public'):
-                tenant = SchoolClient.objects.get(schema_name=schema_name)
-        except SchoolClient.DoesNotExist:
-            pass
-
-        # Build voucher data
-        charges = fee_record.extra_charges or []
-        total = fee_record.amount + sum(Decimal(str(ch['amount'])) for ch in charges)
-        voucher_data = {
-            'student': student,
-            'fee_record': fee_record,
-            'charges': charges,
-            'total': total,
-            'tenant': tenant,
-        }
-        html = render_to_string('tenant/voucher_snippet.html', voucher_data)
-        return HttpResponse(html)"""
-
-    if old_voucher_html in content:
-        content = content.replace(old_voucher_html, new_voucher_html)
-        with open(view_path, "w") as f:
-            f.write(content)
-        print("✅ Patched voucher_html_api view to fetch tenant correctly.")
-    else:
-        # Try a more flexible replacement using regex
-        import re
-        pattern = r"def voucher_html_api\(request, schema_name, student_id\):.*?return HttpResponse\(html\)"
-        match = re.search(pattern, content, re.DOTALL)
-        if match:
-            content = content.replace(match.group(0), new_voucher_html)
-            with open(view_path, "w") as f:
-                f.write(content)
-            print("✅ Patched voucher_html_api view (regex).")
-        else:
-            print("⚠️ Could not find voucher_html_api view. Please check manually.")
-
-
 def main():
     print("=" * 60)
-    print("🎨 AXIS VOUCHER FINAL FIX v2 – Direct Buttons, Single Card")
+    print("🎨 AXIS VOUCHER – PREMIUM FORM UI FIX")
     print("=" * 60)
 
-    # Update voucher_snippet.html
-    patch_file("templates/tenant/voucher_snippet.html", NEW_VOUCHER_SNIPPET)
-
-    # Update voucher_modal.html
+    # Only update voucher_modal.html (form styles are inside it)
     patch_file("templates/tenant/voucher_modal.html", NEW_VOUCHER_MODAL)
 
-    # Patch views.py to fix tenant name
-    patch_view()
-
-    print("\n🎉 All issues fixed!")
-    print("   ✅ Removed 3‑dots dropdown, added direct buttons (Print, Save, Edit).")
-    print("   ✅ Single card design – no separate heading card.")
-    print("   ✅ Premium UI with clean typography and professional layout.")
-    print("   ✅ School name now shows from database.")
-    print("   ✅ Edit button appears only when fee is unpaid.")
-    print("   ✅ Fully responsive – buttons stack on mobile.")
+    print("\n🎉 Voucher form UI fixed successfully!")
+    print("   ✅ Premium form styling – clean, spacious, icons.")
+    print("   ✅ Extra charges section with add/remove.")
+    print("   ✅ Checkbox for default charges.")
+    print("   ✅ Buttons with icons and professional colors.")
+    print("   ✅ Responsive for mobile.")
     print("\n🔄 Restart your server to see the changes.")
     print("   Railway: deploy new release or restart service.")
     print("=" * 60)
