@@ -132,6 +132,7 @@ class FeeRecord(models.Model):
     paid_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     due_date = models.DateField()
     due_date_offset = models.PositiveSmallIntegerField(default=15, help_text="Days after generation when fee is due")
+    late_fee_per_day = models.DecimalField(max_digits=6, decimal_places=2, default=0.00, help_text="Late fee amount applied per day")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     remarks = models.TextField(blank=True, null=True)
     extra_charges = models.JSONField(default=list, blank=True, null=True)

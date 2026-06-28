@@ -56,3 +56,4 @@ class VoucherDefaultsTests(TenantTestCase):
 
         fee_record = self.student.fee_records.get(month=6, year=2026)
         self.assertEqual(fee_record.due_date_offset, 7)
+        self.assertEqual(fee_record.late_fee_per_day, Decimal('15.00'))
