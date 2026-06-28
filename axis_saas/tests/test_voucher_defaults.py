@@ -6,7 +6,7 @@ from django.test import RequestFactory, SimpleTestCase
 from django_tenants.test.cases import TenantTestCase
 
 from axis_saas.models import FeeStructure, SchoolClient, SchoolFeeSettings, Student
-from axis_saas.views import generate_voucher_api
+from axis_saas.views import generate_voucher_api, voucher_status_api
 
 
 class VoucherDefaultsTests(TenantTestCase):
@@ -58,6 +58,26 @@ class VoucherDefaultsTests(TenantTestCase):
         fee_record = self.student.fee_records.get(month=6, year=2026)
         self.assertEqual(fee_record.due_date_offset, 7)
         self.assertEqual(fee_record.late_fee_per_day, Decimal('15.00'))
+
+    def test_voucher_status_uses_saved_late_fee_for_existing_record(self):
+        self.student.fee_records.create(
+            month=6,
+            year=2026,
+            amount=Decimal('500.00'),
+            due_date=date(2026, 6, 15),
+            paid_amount=Decimal('0.00'),
+            late_fee_per_day=Decimal('12.50'),
+            due_date_offset=5,
+            status='pending',
+        )
+
+        request = self.factory.get('/fake/')
+        response = voucher_status_api(request, schema_name='voucherdefaults', student_id=self.student.id)
+
+        self.assertEqual(response.status_code, 200)
+        payload = json.loads(response.content)
+        self.assertEqual(payload['settings']['late_fee_penalty'], 12.5)
+        self.assertEqual(payload['settings']['due_date_offset'], 5)
 
     def test_overdue_pending_fee_gets_fixed_late_fee_amount(self):
         overdue_record = self.student.fee_records.create(
