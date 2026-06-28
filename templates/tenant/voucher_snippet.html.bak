@@ -1,16 +1,11 @@
 {% load static %}
 <div class="voucher-receipt" id="voucherDisplay">
-    <!-- Header: School Name + Voucher # + Status -->
+    <!-- Header: School Name + Voucher # -->
     <div class="voucher-header">
-        <div class="school-brand">
-            <div class="school-name">{{ tenant.name|default:"School" }}</div>
-            <div class="voucher-meta">
-                <span class="voucher-label">Voucher</span>
-                <span class="voucher-number">#{{ fee_record.id }}</span>
-            </div>
-        </div>
-        <div class="voucher-status">
-            <span class="status-badge status-{{ fee_record.status }}">{{ fee_record.get_status_display }}</span>
+        <div class="school-name">{{ tenant.name|default:"School" }}</div>
+        <div class="voucher-meta">
+            <span class="voucher-label">Voucher</span>
+            <span class="voucher-number">#{{ fee_record.id }}</span>
         </div>
     </div>
 
@@ -80,7 +75,7 @@
         {% endif %}
     {% endwith %}
 
-    <!-- Footer: Dates -->
+    <!-- Footer: Dates & Status -->
     <div class="voucher-footer">
         <div class="footer-item">
             <span class="footer-label">Generated</span>
@@ -90,11 +85,15 @@
             <span class="footer-label">Due Date</span>
             <span class="footer-value">{{ fee_record.due_date|date:"d M Y" }}</span>
         </div>
+        <div class="footer-item">
+            <span class="footer-label">Status</span>
+            <span class="footer-value status-badge status-{{ fee_record.status }}">{{ fee_record.get_status_display }}</span>
+        </div>
     </div>
 </div>
 
 <style>
-    /* ----- Premium Voucher – Single Card, Clean ----- */
+    /* ----- Premium Voucher – Clean & Professional ----- */
     .voucher-receipt {
         background: #ffffff;
         border-radius: 1.25rem;
@@ -109,7 +108,7 @@
         box-shadow: 0 12px 40px rgba(0,0,0,0.08);
     }
 
-    /* Header – school + voucher # + status */
+    /* Header – clean, no heavy border */
     .voucher-header {
         display: flex;
         justify-content: space-between;
@@ -120,12 +119,6 @@
         flex-wrap: wrap;
         gap: 0.5rem;
     }
-    .school-brand {
-        display: flex;
-        align-items: baseline;
-        gap: 0.75rem;
-        flex-wrap: wrap;
-    }
     .school-name {
         font-size: 1.15rem;
         font-weight: 700;
@@ -133,14 +126,13 @@
         letter-spacing: -0.02em;
     }
     .voucher-meta {
-        display: inline-flex;
-        align-items: baseline;
-        gap: 0.3rem;
+        text-align: right;
     }
     .voucher-label {
         font-size: 0.6rem;
         text-transform: uppercase;
         color: #6b7280;
+        display: block;
         letter-spacing: 0.3px;
     }
     .voucher-number {
@@ -152,22 +144,8 @@
         padding: 0.1rem 0.5rem;
         border-radius: 0.4rem;
     }
-    .voucher-status .status-badge {
-        display: inline-block;
-        padding: 0.2rem 0.6rem;
-        border-radius: 999px;
-        font-size: 0.65rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.3px;
-    }
-    .status-pending { background: #fef3c7; color: #92400e; }
-    .status-partial { background: #dbeafe; color: #1e40af; }
-    .status-paid   { background: #d1fae5; color: #065f46; }
-    .status-overdue { background: #fee2e2; color: #991b1b; }
-    .status-waived { background: #e0e7ff; color: #3730a3; }
 
-    /* Student Section */
+    /* Student Section – clean grid, subtle background */
     .student-section {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
@@ -277,6 +255,20 @@
         font-weight: 600;
         color: #1f2937;
     }
+    .status-badge {
+        display: inline-block;
+        padding: 0.05rem 0.4rem;
+        border-radius: 999px;
+        font-size: 0.55rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+    .status-pending { background: #fef3c7; color: #92400e; }
+    .status-partial { background: #dbeafe; color: #1e40af; }
+    .status-paid   { background: #d1fae5; color: #065f46; }
+    .status-overdue { background: #fee2e2; color: #991b1b; }
+    .status-waived { background: #e0e7ff; color: #3730a3; }
 
     /* Responsive */
     @media (max-width: 600px) {
@@ -290,8 +282,9 @@
             flex-direction: column;
             align-items: flex-start;
         }
-        .voucher-status {
-            align-self: flex-start;
+        .voucher-meta {
+            text-align: left;
+            width: 100%;
         }
         .voucher-footer {
             flex-direction: column;

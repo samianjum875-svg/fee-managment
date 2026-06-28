@@ -3093,8 +3093,9 @@ def voucher_html_api(request, schema_name, student_id):
     from django.http import HttpResponse
     from django.utils import timezone
     from django.template.loader import render_to_string
-    from .models import Student, FeeRecord
+    from .models import Student, FeeRecord, SchoolClient
     from django_tenants.utils import schema_context
+    from decimal import Decimal
 
     with schema_context(schema_name):
         try:
@@ -3108,7 +3109,15 @@ def voucher_html_api(request, schema_name, student_id):
         if not fee_record:
             return HttpResponse('No fee record for current month', status=404)
 
-        # Build voucher data (similar to receipt)
+        # Fetch tenant from public schema
+        tenant = None
+        try:
+            with schema_context('public'):
+                tenant = SchoolClient.objects.get(schema_name=schema_name)
+        except SchoolClient.DoesNotExist:
+            pass
+
+        # Build voucher data
         charges = fee_record.extra_charges or []
         total = fee_record.amount + sum(Decimal(str(ch['amount'])) for ch in charges)
         voucher_data = {
@@ -3116,7 +3125,7 @@ def voucher_html_api(request, schema_name, student_id):
             'fee_record': fee_record,
             'charges': charges,
             'total': total,
-            'tenant': request.tenant if hasattr(request, 'tenant') else None,
+            'tenant': tenant,
         }
         html = render_to_string('tenant/voucher_snippet.html', voucher_data)
         return HttpResponse(html)
