@@ -1,36 +1,327 @@
-
 {% load static %}
 <div class="voucher-receipt" id="voucherDisplay">
-    <div class="receipt-header">
-        <div class="school-name">{{ tenant.name|default:"School" }}</div>
-        <div class="receipt-no">Voucher #{{ fee_record.id }}</div>
+    <!-- Header: School Logo + Name -->
+    <div class="voucher-header">
+        <div class="school-brand">
+            {% if tenant.school_logo %}
+                <img src="{{ tenant.school_logo.url }}" alt="School Logo" class="school-logo">
+            {% else %}
+                <div class="logo-placeholder">{{ tenant.name|slice:":2"|upper }}</div>
+            {% endif %}
+            <div class="school-name">{{ tenant.name|default:"School" }}</div>
+        </div>
+        <div class="voucher-meta">
+            <span class="voucher-label">Voucher #</span>
+            <span class="voucher-number">{{ fee_record.id }}</span>
+        </div>
     </div>
-    <div class="student-info">
-        <div><strong>Student:</strong> {{ student.name }}</div>
-        <div><strong>Roll:</strong> {{ student.roll_number }}</div>
-        <div><strong>Class:</strong> {{ student.grade }} - {{ student.section }}</div>
-        <div><strong>Month:</strong> {{ fee_record.month }}/{{ fee_record.year }}</div>
+
+    <!-- Student Information -->
+    <div class="student-section">
+        <div class="student-detail">
+            <span class="detail-label">Student</span>
+            <span class="detail-value">{{ student.name }}</span>
+        </div>
+        <div class="student-detail">
+            <span class="detail-label">Roll No.</span>
+            <span class="detail-value">{{ student.roll_number }}</span>
+        </div>
+        <div class="student-detail">
+            <span class="detail-label">Father</span>
+            <span class="detail-value">{{ student.father_name }}</span>
+        </div>
+        <div class="student-detail">
+            <span class="detail-label">Class</span>
+            <span class="detail-value">{{ student.grade }} - {{ student.section }}</span>
+        </div>
+        <div class="student-detail">
+            <span class="detail-label">Admission</span>
+            <span class="detail-value">{{ student.admission_date|date:"d M Y" }}</span>
+        </div>
+        <div class="student-detail">
+            <span class="detail-label">Month</span>
+            <span class="detail-value">{{ fee_record.month }}/{{ fee_record.year }}</span>
+        </div>
     </div>
-    <div class="fee-details">
+
+    <!-- Fee Details Table -->
+    <div class="fee-table">
         <table>
-            <thead><tr><th>Description</th><th>Amount (₹)</th></tr></thead>
+            <thead>
+                <tr>
+                    <th>Description</th>
+                    <th>Amount (₹)</th>
+                </tr>
+            </thead>
             <tbody>
-                <tr><td>Monthly Fee</td><td>{{ fee_record.amount|floatformat:2 }}</td></tr>
+                <tr>
+                    <td>Monthly Fee</td>
+                    <td>{{ fee_record.amount|floatformat:2 }}</td>
+                </tr>
                 {% for ch in charges %}
-                <tr><td>{{ ch.title }}</td><td>{{ ch.amount|floatformat:2 }}</td></tr>
+                <tr>
+                    <td>{{ ch.title }}</td>
+                    <td>{{ ch.amount|floatformat:2 }}</td>
+                </tr>
                 {% endfor %}
-                <tr class="total-row"><td><strong>Total</strong></td><td><strong>{{ total|floatformat:2 }}</strong></td></tr>
+                <tr class="total-row">
+                    <td><strong>Total</strong></td>
+                    <td><strong>{{ total|floatformat:2 }}</strong></td>
+                </tr>
             </tbody>
         </table>
     </div>
-    <div class="pending-note">
-        {% with pending=fee_record.student.fee_records.aggregate.total %}
+
+    <!-- Pending Note (if any) -->
+    {% with pending=fee_record.student.fee_records.aggregate.total %}
         {% if pending %}
-        ⚠️ Total pending (including previous months): ₹{{ pending|floatformat:2 }}
+        <div class="pending-note">
+            <span class="pending-icon">⚠️</span>
+            Total pending (including previous months): <strong>₹{{ pending|floatformat:2 }}</strong>
+        </div>
         {% endif %}
-        {% endwith %}
-    </div>
+    {% endwith %}
+
+    <!-- Footer: Dates & Status -->
     <div class="voucher-footer">
-        Generated on: {{ fee_record.due_date|date:"Y-m-d" }} | Due: {{ fee_record.due_date|date:"Y-m-d" }}
+        <div class="footer-item">
+            <span class="footer-label">Generated on</span>
+            <span class="footer-value">{{ fee_record.due_date|date:"d M Y" }}</span>
+        </div>
+        <div class="footer-item">
+            <span class="footer-label">Due Date</span>
+            <span class="footer-value">{{ fee_record.due_date|date:"d M Y" }}</span>
+        </div>
+        <div class="footer-item">
+            <span class="footer-label">Status</span>
+            <span class="footer-value status-badge status-{{ fee_record.status }}">{{ fee_record.get_status_display }}</span>
+        </div>
     </div>
 </div>
+
+<style>
+    /* --- Premium Voucher Styles --- */
+    .voucher-receipt {
+        background: var(--surface, #ffffff);
+        border-radius: 1.25rem;
+        padding: 1.5rem;
+        border: 1px solid var(--border, #e2e8f0);
+        box-shadow: 0 8px 30px rgba(0,0,0,0.06);
+        font-family: system-ui, -apple-system, sans-serif;
+        max-width: 100%;
+        margin: 0 auto;
+    }
+
+    /* Header */
+    .voucher-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 2px solid var(--primary, #3b82f6);
+        padding-bottom: 0.75rem;
+        margin-bottom: 1rem;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .school-brand {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+    .school-logo {
+        height: 48px;
+        width: auto;
+        border-radius: 0.5rem;
+        object-fit: contain;
+    }
+    .logo-placeholder {
+        width: 48px;
+        height: 48px;
+        background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+        border-radius: 0.75rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        font-size: 1.2rem;
+        color: white;
+        flex-shrink: 0;
+    }
+    .school-name {
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: var(--text, #1f2937);
+        line-height: 1.2;
+    }
+    .voucher-meta {
+        text-align: right;
+    }
+    .voucher-label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        color: var(--muted, #6b7280);
+        display: block;
+    }
+    .voucher-number {
+        font-size: 1.1rem;
+        font-weight: 700;
+        font-family: monospace;
+        color: var(--text, #1f2937);
+    }
+
+    /* Student Section */
+    .student-section {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.5rem 1.5rem;
+        background: var(--surface-alt, #f9fafb);
+        padding: 0.75rem 1rem;
+        border-radius: 0.75rem;
+        margin-bottom: 1rem;
+        border: 1px solid var(--border, #e2e8f0);
+    }
+    .student-detail {
+        display: flex;
+        justify-content: space-between;
+        border-bottom: 1px dashed var(--border, #e2e8f0);
+        padding: 0.3rem 0;
+    }
+    .student-detail:last-child {
+        border-bottom: none;
+    }
+    .detail-label {
+        font-size: 0.75rem;
+        color: var(--muted, #6b7280);
+        font-weight: 500;
+    }
+    .detail-value {
+        font-weight: 600;
+        color: var(--text, #1f2937);
+    }
+
+    /* Fee Table */
+    .fee-table table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 0.5rem 0 1rem;
+        font-size: 0.9rem;
+    }
+    .fee-table th {
+        text-align: left;
+        padding: 0.4rem 0.2rem;
+        font-weight: 600;
+        color: var(--muted, #6b7280);
+        border-bottom: 1px solid var(--border, #e2e8f0);
+        font-size: 0.75rem;
+        text-transform: uppercase;
+    }
+    .fee-table td {
+        padding: 0.4rem 0.2rem;
+        border-bottom: 1px solid var(--border, #e2e8f0);
+    }
+    .fee-table td:last-child {
+        text-align: right;
+        font-weight: 500;
+    }
+    .fee-table .total-row td {
+        border-top: 2px solid var(--primary, #3b82f6);
+        font-weight: 700;
+        padding-top: 0.6rem;
+        font-size: 1rem;
+    }
+    .fee-table .total-row td:last-child {
+        color: var(--primary, #3b82f6);
+    }
+
+    /* Pending Note */
+    .pending-note {
+        background: #fef3c7;
+        color: #92400e;
+        border-radius: 0.5rem;
+        padding: 0.5rem 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.85rem;
+        margin: 0.5rem 0 1rem;
+        border-left: 4px solid #f59e0b;
+    }
+    .pending-icon {
+        font-size: 1.2rem;
+    }
+
+    /* Footer */
+    .voucher-footer {
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        border-top: 1px solid var(--border, #e2e8f0);
+        padding-top: 0.75rem;
+        margin-top: 0.5rem;
+        font-size: 0.8rem;
+    }
+    .footer-item {
+        display: flex;
+        gap: 0.3rem;
+    }
+    .footer-label {
+        color: var(--muted, #6b7280);
+        font-weight: 500;
+    }
+    .footer-value {
+        font-weight: 600;
+        color: var(--text, #1f2937);
+    }
+    .status-badge {
+        display: inline-block;
+        padding: 0.1rem 0.5rem;
+        border-radius: 999px;
+        font-size: 0.65rem;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+    .status-pending {
+        background: #fef3c7;
+        color: #92400e;
+    }
+    .status-partial {
+        background: #dbeafe;
+        color: #1e40af;
+    }
+    .status-paid {
+        background: #d1fae5;
+        color: #065f46;
+    }
+    .status-overdue {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+    .status-waived {
+        background: #e0e7ff;
+        color: #3730a3;
+    }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+        .student-section {
+            grid-template-columns: 1fr;
+        }
+        .voucher-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        .voucher-meta {
+            text-align: left;
+            width: 100%;
+        }
+        .voucher-footer {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.3rem;
+        }
+        .fee-table table {
+            font-size: 0.8rem;
+        }
+    }
+</style>
