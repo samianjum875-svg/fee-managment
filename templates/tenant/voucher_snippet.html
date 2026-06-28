@@ -1,0 +1,36 @@
+
+{% load static %}
+<div class="voucher-receipt" id="voucherDisplay">
+    <div class="receipt-header">
+        <div class="school-name">{{ tenant.name|default:"School" }}</div>
+        <div class="receipt-no">Voucher #{{ fee_record.id }}</div>
+    </div>
+    <div class="student-info">
+        <div><strong>Student:</strong> {{ student.name }}</div>
+        <div><strong>Roll:</strong> {{ student.roll_number }}</div>
+        <div><strong>Class:</strong> {{ student.grade }} - {{ student.section }}</div>
+        <div><strong>Month:</strong> {{ fee_record.month }}/{{ fee_record.year }}</div>
+    </div>
+    <div class="fee-details">
+        <table>
+            <thead><tr><th>Description</th><th>Amount (₹)</th></tr></thead>
+            <tbody>
+                <tr><td>Monthly Fee</td><td>{{ fee_record.amount|floatformat:2 }}</td></tr>
+                {% for ch in charges %}
+                <tr><td>{{ ch.title }}</td><td>{{ ch.amount|floatformat:2 }}</td></tr>
+                {% endfor %}
+                <tr class="total-row"><td><strong>Total</strong></td><td><strong>{{ total|floatformat:2 }}</strong></td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="pending-note">
+        {% with pending=fee_record.student.fee_records.aggregate.total %}
+        {% if pending %}
+        ⚠️ Total pending (including previous months): ₹{{ pending|floatformat:2 }}
+        {% endif %}
+        {% endwith %}
+    </div>
+    <div class="voucher-footer">
+        Generated on: {{ fee_record.due_date|date:"Y-m-d" }} | Due: {{ fee_record.due_date|date:"Y-m-d" }}
+    </div>
+</div>

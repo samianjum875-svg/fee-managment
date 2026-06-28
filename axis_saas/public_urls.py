@@ -11,6 +11,8 @@ from .models import SchoolClient
 
 from .views import mobile_fee_structure, gym_generate_subscription, gym_cancel_subscription, gym_update_subscription, gym_edit_attendance, add_student, add_student_mobile, dashboard, debug_payments_api, defaulters, edit_student, family_payment, fee_collection, mobile_fee_collection, fee_receipt, mobile_fee_receipt, fee_settings, fee_status_api, fee_structure, gym_attendance, gym_checkin_api, gym_checkout_api, gym_customer_add, gym_customer_edit, gym_customer_list, gym_customer_profile, gym_dashboard, gym_payment, gym_receipt, gym_reports, gym_settings, manual_generate_api, manual_generate_single_api, reports, settings, student_fee_records_api, student_list, student_payments_api, student_current_fee_status_api, student_profile, student_search_api, gym_revenue_stats_api, gym_attendance_stats_api, gym_customers_list_api, gym_customer_detail_api, gym_subscription_status_api, gym_attendance_data_api, gym_eligible_customers_api, gym_search_customer_api, gym_export_attendance_api, stock_management, product_detail, mobile_stock_management, mobile_product_detail, add_category, delete_category, add_product, delete_product, sell_separately, mobile_sell_separately, mobile_dashboard, mobile_more, mobile_student_list, mobile_student_profile, mobile_defaulters, mobile_reports, mobile_fee_settings, mobile_settings
 from .pwa_views import manifest, service_worker
+from .views import voucher_status_api, generate_voucher_api, voucher_html_api
+
 
 
 def saas_homepage(request):
@@ -278,4 +280,9 @@ urlpatterns = [
     path('portal/<slug:schema_name>/sell/mobile/', portal_wrapper(login_required_for_schema(mobile_sell_separately)), name='mobile_sell_separately'),
     path('sw.js', service_worker, name='service_worker'),
     path('portal/<slug:schema_name>/manifest.json', manifest, name='pwa_manifest'),
+
+    # Voucher endpoints
+    path('portal/<slug:schema_name>/api/student/<int:student_id>/voucher-status/', voucher_status_api, name='voucher_status_api'),
+    path('portal/<slug:schema_name>/api/student/<int:student_id>/generate-voucher/', generate_voucher_api, name='generate_voucher_api'),
+    path('portal/<slug:schema_name>/api/student/<int:student_id>/voucher-html/', voucher_html_api, name='voucher_html_api'),
 ]

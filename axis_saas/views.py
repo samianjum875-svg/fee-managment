@@ -50,6 +50,10 @@ def require_school_feature(feature_key):
 
 from .models import SchoolClient, Student, FeeStructure, FeeRecord, PaymentTransaction, SchoolFeeSettings, Product, ProductCategory
 from .forms import StudentForm, FeeCollectionForm, FeeSettingsForm, FeeStructureForm, FamilyPaymentForm
+from django.http import JsonResponse, HttpResponse
+from django.db import transaction
+
+
 
 
 def get_overall_pending(student):
@@ -2906,3 +2910,214 @@ def mobile_settings(request, schema_name):
         return redirect('settings', schema_name=schema_name)
     context = {'tenant': tenant, 'logo_url': tenant.school_logo.url if tenant.school_logo else None}
     return render(request, 'mobile/settings.html', context)
+
+
+# ------------------- VOUCHER FEATURE VIEWS -------------------
+def voucher_status_api(request, schema_name, student_id):
+    """API: Get current month fee status, default fee, charges, pending totals."""
+    from django.http import JsonResponse
+    from django.utils import timezone
+    from decimal import Decimal
+    from .models import Student, FeeRecord, FeeStructure
+    from django_tenants.utils import schema_context
+
+    with schema_context(schema_name):
+        try:
+            student = Student.objects.get(id=student_id)
+        except Student.DoesNotExist:
+            return JsonResponse({'error': 'Student not found'}, status=404)
+
+        today = timezone.localdate()
+        month, year = today.month, today.year
+
+        # Get current month fee record
+        fee_record = None
+        try:
+            fee_record = FeeRecord.objects.get(student=student, month=month, year=year)
+        except FeeRecord.DoesNotExist:
+            pass
+
+        # Calculate default fee from structure
+        default_fee = Decimal('0')
+        fee_struct = FeeStructure.objects.filter(grade=student.grade).first()
+        if fee_struct:
+            default_fee = fee_struct.monthly_fee
+        if student.custom_fee > 0:
+            default_fee = student.custom_fee
+
+        # Overall pending (fee + items) - reuse existing function if available
+        # We'll compute manually
+        total_fee = student.fee_records.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+        total_paid = student.payments.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+        # For simplicity, we ignore items cost here; we can compute if needed
+        pending = total_fee - total_paid
+        if pending < 0:
+            pending = Decimal('0')
+
+        # Default extra charges from student
+        default_charges = student.default_extra_charges or []
+
+        response = {
+            'exists': fee_record is not None,
+            'fee_record': {
+                'id': fee_record.id if fee_record else None,
+                'amount': float(fee_record.amount) if fee_record else 0,
+                'paid_amount': float(fee_record.paid_amount) if fee_record else 0,
+                'extra_charges': fee_record.extra_charges or [] if fee_record else [],
+                'status': fee_record.status if fee_record else None,
+                'can_edit': fee_record and fee_record.paid_amount == 0,
+            } if fee_record else None,
+            'default_fee': float(default_fee),
+            'default_charges': default_charges,
+            'student_name': student.name,
+            'student_roll': student.roll_number,
+            'grade': student.grade,
+            'section': student.section,
+            'total_pending': float(pending),
+        }
+        return JsonResponse(response)
+
+
+@csrf_exempt
+def generate_voucher_api(request, schema_name, student_id):
+    """API: Create or update fee record for current month with custom amount and charges."""
+    from django.http import JsonResponse
+    from django.utils import timezone
+    from decimal import Decimal
+    from .models import Student, FeeRecord, FeeStructure, PaymentTransaction
+    from django_tenants.utils import schema_context
+    import json
+
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+    except:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    custom_amount = data.get('custom_amount')
+    charges = data.get('charges', [])
+    save_default = data.get('save_default_charges', False)
+
+    with schema_context(schema_name):
+        try:
+            student = Student.objects.get(id=student_id)
+        except Student.DoesNotExist:
+            return JsonResponse({'error': 'Student not found'}, status=404)
+
+        today = timezone.localdate()
+        month, year = today.month, today.year
+
+        # Determine fee amount
+        if custom_amount is not None:
+            try:
+                amount = Decimal(str(custom_amount))
+                if amount <= 0:
+                    raise ValueError
+            except:
+                return JsonResponse({'error': 'Invalid custom amount'}, status=400)
+        else:
+            # Use default fee from structure or custom_fee
+            amount = student.custom_fee if student.custom_fee > 0 else Decimal('0')
+            if amount == 0:
+                fee_struct = FeeStructure.objects.filter(grade=student.grade).first()
+                if fee_struct:
+                    amount = fee_struct.monthly_fee
+            if amount <= 0:
+                return JsonResponse({'error': 'No fee structure defined and no custom amount provided.'}, status=400)
+
+        # Validate charges: list of {title, amount}
+        validated_charges = []
+        for ch in charges:
+            if isinstance(ch, dict) and 'title' in ch and 'amount' in ch:
+                try:
+                    ch_amount = Decimal(str(ch['amount']))
+                    if ch_amount < 0:
+                        continue
+                    validated_charges.append({'title': ch['title'].strip(), 'amount': float(ch_amount)})
+                except:
+                    pass
+
+        # Get or create fee record
+        fee_record, created = FeeRecord.objects.get_or_create(
+            student=student,
+            month=month,
+            year=year,
+            defaults={
+                'amount': amount,
+                'due_date': today + timedelta(days=15),  # default offset
+                'status': 'pending'
+            }
+        )
+        if not created:
+            # If already exists, update amount and charges only if unpaid
+            if fee_record.paid_amount > 0:
+                return JsonResponse({'error': 'Fee already paid, cannot modify.'}, status=400)
+            fee_record.amount = amount
+            fee_record.extra_charges = validated_charges
+            fee_record.save()
+        else:
+            # New record: set extra_charges
+            fee_record.extra_charges = validated_charges
+            fee_record.save()
+
+        # Save default charges if requested
+        if save_default:
+            student.default_extra_charges = validated_charges
+            student.save(update_fields=['default_extra_charges'])
+
+        # Build voucher data
+        voucher = {
+            'receipt_number': f'VOUCHER-{student.id}-{year}{month:02d}',
+            'student_name': student.name,
+            'student_roll': student.roll_number,
+            'grade': student.grade,
+            'section': student.section,
+            'fee_amount': float(amount),
+            'charges': validated_charges,
+            'month': month,
+            'year': year,
+            'due_date': fee_record.due_date.strftime('%Y-%m-%d'),
+            'total_pending': float(student.fee_records.aggregate(Sum('amount'))['amount__sum'] or 0) - float(student.payments.aggregate(Sum('amount'))['amount__sum'] or 0),
+            'generated_on': timezone.now().strftime('%Y-%m-%d %H:%M'),
+        }
+        # Calculate total
+        voucher['total'] = voucher['fee_amount'] + sum(ch['amount'] for ch in voucher['charges'])
+
+        return JsonResponse({'success': True, 'voucher': voucher, 'created': created})
+
+
+def voucher_html_api(request, schema_name, student_id):
+    """API: Return HTML of the voucher for the current month (or latest if not exists)."""
+    from django.http import HttpResponse
+    from django.utils import timezone
+    from django.template.loader import render_to_string
+    from .models import Student, FeeRecord
+    from django_tenants.utils import schema_context
+
+    with schema_context(schema_name):
+        try:
+            student = Student.objects.get(id=student_id)
+        except Student.DoesNotExist:
+            return HttpResponse('Student not found', status=404)
+
+        today = timezone.localdate()
+        month, year = today.month, today.year
+        fee_record = FeeRecord.objects.filter(student=student, month=month, year=year).first()
+        if not fee_record:
+            return HttpResponse('No fee record for current month', status=404)
+
+        # Build voucher data (similar to receipt)
+        charges = fee_record.extra_charges or []
+        total = fee_record.amount + sum(Decimal(str(ch['amount'])) for ch in charges)
+        voucher_data = {
+            'student': student,
+            'fee_record': fee_record,
+            'charges': charges,
+            'total': total,
+            'tenant': request.tenant if hasattr(request, 'tenant') else None,
+        }
+        html = render_to_string('tenant/voucher_snippet.html', voucher_data)
+        return HttpResponse(html)
+
