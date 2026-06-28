@@ -83,7 +83,7 @@
     <div class="guidance-card">
         <div class="guidance-title">Payment guidance</div>
         <div class="guidance-body">Due date: <strong>{{ fee_record.due_date|date:"d M Y" }}</strong></div>
-        <div class="guidance-body">Late fee: <strong>{{ settings.late_fee_penalty|default:0 }}%</strong> applied daily after the due date.</div>
+        <div class="guidance-body">Late fee: <strong>₹{{ settings.late_fee_penalty|default:0 }}</strong> added to overdue unpaid dues.</div>
     </div>
 
     <!-- Footer: Dates -->

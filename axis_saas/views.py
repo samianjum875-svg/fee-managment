@@ -3082,17 +3082,24 @@ def generate_voucher_api(request, schema_name, student_id):
         if not created:
             if fee_record.paid_amount > 0:
                 return JsonResponse({'error': 'Fee already paid, cannot modify.'}, status=400)
-            fee_record.amount = amount
             fee_record.extra_charges = effective_charges
             fee_record.due_date = today + timedelta(days=offset_value)
             fee_record.due_date_offset = offset_value
             fee_record.late_fee_per_day = penalty_value
+            if fee_record.paid_amount == 0 and fee_record.due_date < today and fee_record.status in ['pending', 'overdue']:
+                fee_record.amount = max(amount + penalty_value, amount)
+            else:
+                fee_record.amount = amount
             fee_record.save()
         else:
             fee_record.extra_charges = effective_charges
             fee_record.due_date = today + timedelta(days=offset_value)
             fee_record.due_date_offset = offset_value
             fee_record.late_fee_per_day = penalty_value
+            if fee_record.paid_amount == 0 and fee_record.due_date < today and fee_record.status in ['pending', 'overdue']:
+                fee_record.amount = max(amount + penalty_value, amount)
+            else:
+                fee_record.amount = amount
             fee_record.save()
 
         if save_default:

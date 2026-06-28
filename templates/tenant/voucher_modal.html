@@ -426,11 +426,11 @@ function showVoucherForm(data, isEdit) {
                 <div class="form-group">
                     <label>
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="8"/></svg>
-                        Late Fee Penalty (%)
+                        Late Fee Amount (₹)
                     </label>
                     <input type="number" min="0" step="0.01" id="voucherLateFeePenalty" value="${latePenalty}">
                 </div>
-                <div class="guidance-note">This due date is calculated from the generation date. After it passes, the configured penalty applies daily to the outstanding amount.</div>
+                <div class="guidance-note">This fixed amount is added only to overdue, unpaid dues. It does not affect fees that are still upcoming or already paid.</div>
             </div>`;
     html += `<div class="charges-card">
                 <div class="form-group">

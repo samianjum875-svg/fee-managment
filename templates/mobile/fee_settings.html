@@ -271,7 +271,7 @@
       <div class="help-text">Number of days after generation when fee becomes due.</div>
     </div>
     <div class="form-group">
-      <label for="id_late_fee_penalty">Late Fee Penalty (%)</label>
+      <label for="id_late_fee_penalty">Late Fee Amount (₹)</label>
       <div class="input-with-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
         {{ form.late_fee_penalty }}
@@ -327,7 +327,7 @@
   <ul>
     <li><strong>Automatic Generation:</strong> On the selected day of each month, the system creates fee records for all active students based on their assigned fee structure.</li>
     <li><strong>Due Date:</strong> Fee becomes due after the configured offset days (e.g., generation on 1st with 15 days offset → due on 16th).</li>
-    <li><strong>Late Fee:</strong> After due date, the penalty percentage is applied to the pending amount automatically.</li>
+    <li><strong>Late Fee:</strong> After the due date, this fixed amount is added to overdue unpaid dues automatically.</li>
     <li><strong>Manual Generation:</strong> Click the button above to force generation for current month (useful for testing or after setup).</li>
   </ul>
 </div>

@@ -1,4 +1,5 @@
 import json
+from datetime import date
 from decimal import Decimal
 
 from django.test import RequestFactory, SimpleTestCase
@@ -57,3 +58,27 @@ class VoucherDefaultsTests(TenantTestCase):
         fee_record = self.student.fee_records.get(month=6, year=2026)
         self.assertEqual(fee_record.due_date_offset, 7)
         self.assertEqual(fee_record.late_fee_per_day, Decimal('15.00'))
+
+    def test_overdue_pending_fee_gets_fixed_late_fee_amount(self):
+        overdue_record = self.student.fee_records.create(
+            month=5,
+            year=2026,
+            amount=Decimal('500.00'),
+            due_date=date(2026, 5, 1),
+            paid_amount=Decimal('0.00'),
+            late_fee_per_day=Decimal('10.00'),
+        )
+        overdue_record.status = 'pending'
+        overdue_record.save(update_fields=['status'])
+
+        request = self.factory.post(
+            '/fake/',
+            data=json.dumps({'custom_amount': '650.00', 'charges': [], 'save_default_charges': False, 'due_date_offset': 7, 'late_fee_penalty': '10.00'}),
+            content_type='application/json',
+        )
+
+        response = generate_voucher_api(request, schema_name='voucherdefaults', student_id=self.student.id)
+
+        self.assertEqual(response.status_code, 200)
+        overdue_record.refresh_from_db()
+        self.assertEqual(overdue_record.amount, Decimal('510.00'))
