@@ -196,6 +196,7 @@ class SchoolFeeSettings(models.Model):
     fee_generation_day = models.PositiveSmallIntegerField(default=1, help_text="Day of month (1-31)")
     due_date_offset = models.PositiveSmallIntegerField(default=15, help_text="Days after generation when fee is due")
     late_fee_penalty = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, help_text="Penalty %")
+    default_extra_charges = models.JSONField(default=list, blank=True, null=True, help_text="Common charges used for future vouchers")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

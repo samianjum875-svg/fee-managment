@@ -80,6 +80,12 @@
         {% endif %}
     {% endwith %}
 
+    <div class="guidance-card">
+        <div class="guidance-title">Payment guidance</div>
+        <div class="guidance-body">Due date: <strong>{{ fee_record.due_date|date:"d M Y" }}</strong></div>
+        <div class="guidance-body">Late fee: <strong>{{ settings.late_fee_penalty|default:0 }}%</strong> applied daily after the due date.</div>
+    </div>
+
     <!-- Footer: Dates -->
     <div class="voucher-footer">
         <div class="footer-item">
@@ -250,6 +256,26 @@
     }
     .pending-icon {
         font-size: 1rem;
+    }
+
+    .guidance-card {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 0.75rem;
+        padding: 0.6rem 0.75rem;
+        margin: 0.6rem 0 0.8rem;
+    }
+    .guidance-title {
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        color: #64748b;
+        margin-bottom: 0.25rem;
+    }
+    .guidance-body {
+        font-size: 0.8rem;
+        color: #334155;
     }
 
     /* Footer */
