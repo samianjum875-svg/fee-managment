@@ -3061,6 +3061,7 @@ def generate_voucher_api(request, schema_name, student_id):
                 defaults={
                     'amount': amount,
                     'due_date': today + timedelta(days=offset_value),
+                    'due_date_offset': offset_value,
                     'status': 'pending'
                 }
             )
@@ -3069,7 +3070,7 @@ def generate_voucher_api(request, schema_name, student_id):
             if 'due_date' in str(exc) or 'due_date_offset' in str(exc) or 'NOT NULL' in str(exc):
                 fee_record = FeeRecord.objects.filter(student=student, month=month, year=year).first()
                 if not fee_record:
-                    fee_record = FeeRecord(student=student, month=month, year=year, amount=amount, due_date=today + timedelta(days=offset_value), status='pending')
+                    fee_record = FeeRecord(student=student, month=month, year=year, amount=amount, due_date=today + timedelta(days=offset_value), due_date_offset=offset_value, status='pending')
                     fee_record.save(force_insert=True)
                     created = True
                 else:
@@ -3082,17 +3083,13 @@ def generate_voucher_api(request, schema_name, student_id):
                 return JsonResponse({'error': 'Fee already paid, cannot modify.'}, status=400)
             fee_record.amount = amount
             fee_record.extra_charges = effective_charges
-            if getattr(fee_record, 'due_date', None) is None:
-                fee_record.due_date = today + timedelta(days=offset_value)
-            else:
-                fee_record.due_date = today + timedelta(days=offset_value)
+            fee_record.due_date = today + timedelta(days=offset_value)
+            fee_record.due_date_offset = offset_value
             fee_record.save()
         else:
             fee_record.extra_charges = effective_charges
-            if getattr(fee_record, 'due_date', None) is None:
-                fee_record.due_date = today + timedelta(days=offset_value)
-            else:
-                fee_record.due_date = today + timedelta(days=offset_value)
+            fee_record.due_date = today + timedelta(days=offset_value)
+            fee_record.due_date_offset = offset_value
             fee_record.save()
 
         if save_default:

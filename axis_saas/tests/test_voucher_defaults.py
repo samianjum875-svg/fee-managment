@@ -53,3 +53,6 @@ class VoucherDefaultsTests(TenantTestCase):
         self.assertEqual(settings.default_extra_charges[0]['title'], 'Library Fee')
         self.assertEqual(settings.due_date_offset, 7)
         self.assertEqual(settings.late_fee_penalty, Decimal('15.00'))
+
+        fee_record = self.student.fee_records.get(month=6, year=2026)
+        self.assertEqual(fee_record.due_date_offset, 7)
