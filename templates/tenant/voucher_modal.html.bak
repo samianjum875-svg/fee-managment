@@ -125,6 +125,122 @@
         justify-content: center;
     }
 }
+
+/* ===== PREMIUM FORM STYLES ===== */
+.voucher-form {
+    padding: 0.2rem 0;
+}
+.voucher-form .form-group {
+    margin-bottom: 1.2rem;
+}
+.voucher-form .form-group label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: 600;
+    font-size: 0.85rem;
+    margin-bottom: 0.3rem;
+    color: #1f2937;
+}
+.voucher-form .form-group label svg {
+    color: #3b82f6;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+.voucher-form .form-group input,
+.voucher-form .form-group select {
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid #d1d5db;
+    background: #f9fafb;
+    font-size: 0.9rem;
+    transition: border-color 0.2s;
+}
+.voucher-form .form-group input:focus,
+.voucher-form .form-group select:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+}
+.voucher-form .charge-item {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+.voucher-form .charge-item input {
+    flex: 1;
+}
+.voucher-form .charge-item .remove-charge {
+    background: none;
+    border: none;
+    color: #ef4444;
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0 0.2rem;
+    line-height: 1;
+}
+.voucher-form .btn-secondary,
+.voucher-form .btn-primary {
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.9rem;
+}
+.voucher-form .btn-secondary {
+    background: #f3f4f6;
+    color: #1f2937;
+}
+.voucher-form .btn-secondary:hover {
+    background: #e5e7eb;
+}
+.voucher-form .btn-primary {
+    background: #3b82f6;
+    color: white;
+}
+.voucher-form .btn-primary:hover {
+    background: #2563eb;
+}
+.voucher-form .form-actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+    margin-top: 1.2rem;
+}
+.voucher-form .form-actions button {
+    padding: 0.5rem 1.2rem;
+}
+.voucher-form .info-box {
+    background: #f9fafb;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid #e5e7eb;
+    margin-bottom: 0.8rem;
+}
+.voucher-form .info-box strong {
+    color: #1f2937;
+}
+.voucher-form .checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 400;
+    font-size: 0.85rem;
+    color: #1f2937;
+}
+.voucher-form .checkbox-group input[type="checkbox"] {
+    width: 1.1rem;
+    height: 1.1rem;
+    accent-color: #3b82f6;
+}
 </style>
 
 <script>
@@ -163,7 +279,7 @@ function closeVoucherModal() {
 
 function loadVoucherStatus(studentId, schema) {
     const body = document.getElementById('voucherModalBody');
-    body.innerHTML = '<p style="text-align:center; padding:1rem;">Loading...</p>';
+    body.innerHTML = '<p style="text-align:center; padding:1rem; color:#6b7280;">Loading...</p>';
     fetch(`/portal/${schema}/api/student/${studentId}/voucher-status/`)
         .then(res => res.json())
         .then(data => {
@@ -242,7 +358,7 @@ function downloadVoucherImage(element) {
 function showVoucherForm(data, isEdit) {
     const body = document.getElementById('voucherModalBody');
     let html = '<div class="voucher-form">';
-    html += `<div style="display:grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom:1rem; font-size:0.9rem;">
+    html += `<div style="display:grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom:1rem; font-size:0.9rem; background:#f9fafb; padding:0.5rem 0.75rem; border-radius:0.5rem; border:1px solid #e5e7eb;">
                 <div><strong>Student:</strong> ${data.student_name} (${data.student_roll})</div>
                 <div><strong>Class:</strong> ${data.grade} - ${data.section}</div>
             </div>`;
@@ -272,14 +388,12 @@ function showVoucherForm(data, isEdit) {
                 Add Charge
             </button>`;
     html += `</div></div>`;
-    html += `<div class="form-group" style="background:#f9fafb; padding:0.5rem; border-radius:0.5rem;">
+    html += `<div class="info-box">
                 <strong>Total Pending (including this fee):</strong> ₹<span id="voucherTotalPending">${data.total_pending}</span>
             </div>`;
-    html += `<div class="form-group">
-                <label>
-                    <input type="checkbox" id="saveDefaultCharges" ${(data.default_charges && data.default_charges.length) ? 'checked' : ''}>
-                    <span style="font-weight:400;">Save these charges as defaults for this student</span>
-                </label>
+    html += `<div class="form-group checkbox-group">
+                <input type="checkbox" id="saveDefaultCharges" ${(data.default_charges && data.default_charges.length) ? 'checked' : ''}>
+                <label for="saveDefaultCharges" style="font-weight:400; cursor:pointer;">Save these charges as defaults for this student</label>
             </div>`;
     html += `<div class="form-actions">
                 <button type="button" class="btn-secondary" onclick="closeVoucherModal()">

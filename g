@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """
-AXIS Voucher – Premium Form UI Fix
-Run: python3 fix_voucher_form_ui.py
+AXIS Voucher – Hide footer buttons on form, show on voucher.
+Run: python3 fix_voucher_buttons_toggle.py
 """
 
 import os
 import shutil
 
-# ========== NEW voucher_modal.html (with premium form styles) ==========
 NEW_VOUCHER_MODAL = """<!-- Voucher Modal – Single Card with Direct Buttons -->
 <div id="voucherModal" class="modal" style="display:none;">
     <div class="modal-content" style="max-width: 820px;">
@@ -17,8 +16,8 @@ NEW_VOUCHER_MODAL = """<!-- Voucher Modal – Single Card with Direct Buttons --
         <div id="voucherModalBody">
             <!-- Content loaded via JS -->
         </div>
-        <!-- Action Buttons -->
-        <div class="modal-footer">
+        <!-- Action Buttons (visible only when voucher is shown) -->
+        <div class="modal-footer" id="modalFooter">
             <button class="btn-action" id="printVoucherBtn">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><path d="M6 9V3h12v6"/><rect x="6" y="15" width="12" height="6" rx="2"/></svg>
                 Print
@@ -254,7 +253,7 @@ NEW_VOUCHER_MODAL = """<!-- Voucher Modal – Single Card with Direct Buttons --
 </style>
 
 <script>
-// Voucher JS – direct buttons, no dropdown
+// Voucher JS – direct buttons, no dropdown, with footer toggle
 function getCsrfToken() {
     let name = 'csrftoken';
     let cookieValue = null;
@@ -290,6 +289,9 @@ function closeVoucherModal() {
 function loadVoucherStatus(studentId, schema) {
     const body = document.getElementById('voucherModalBody');
     body.innerHTML = '<p style="text-align:center; padding:1rem; color:#6b7280;">Loading...</p>';
+    // Hide footer while loading
+    const footer = document.getElementById('modalFooter');
+    if (footer) footer.style.display = 'none';
     fetch(`/portal/${schema}/api/student/${studentId}/voucher-status/`)
         .then(res => res.json())
         .then(data => {
@@ -302,6 +304,8 @@ function loadVoucherStatus(studentId, schema) {
                 // Already paid – show voucher only
                 showVoucher(data, schema, studentId);
                 document.getElementById('editVoucherBtn').style.display = 'none';
+                // Show footer (voucher view)
+                if (footer) footer.style.display = 'flex';
             } else if (data.exists && data.fee_record.paid_amount === 0) {
                 // Unpaid – show voucher + edit
                 showVoucher(data, schema, studentId);
@@ -309,10 +313,12 @@ function loadVoucherStatus(studentId, schema) {
                 document.getElementById('editVoucherBtn').onclick = function() {
                     showVoucherForm(data, true);
                 };
+                if (footer) footer.style.display = 'flex';
             } else {
-                // No fee – show form
+                // No fee – show form (footer hidden)
                 showVoucherForm(data, false);
                 document.getElementById('editVoucherBtn').style.display = 'none';
+                if (footer) footer.style.display = 'none';
             }
         })
         .catch(err => {
@@ -322,10 +328,13 @@ function loadVoucherStatus(studentId, schema) {
 
 function showVoucher(data, schema, studentId) {
     const body = document.getElementById('voucherModalBody');
+    const footer = document.getElementById('modalFooter');
     fetch(`/portal/${schema}/api/student/${studentId}/voucher-html/`)
         .then(res => res.text())
         .then(html => {
             body.innerHTML = html;
+            // Show footer (voucher view)
+            if (footer) footer.style.display = 'flex';
             // Attach print and download actions
             document.getElementById('printVoucherBtn').onclick = function() {
                 const content = document.querySelector('.voucher-receipt');
@@ -367,6 +376,10 @@ function downloadVoucherImage(element) {
 
 function showVoucherForm(data, isEdit) {
     const body = document.getElementById('voucherModalBody');
+    // Hide footer (form view)
+    const footer = document.getElementById('modalFooter');
+    if (footer) footer.style.display = 'none';
+
     let html = '<div class="voucher-form">';
     html += `<div style="display:grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom:1rem; font-size:0.9rem; background:#f9fafb; padding:0.5rem 0.75rem; border-radius:0.5rem; border:1px solid #e5e7eb;">
                 <div><strong>Student:</strong> ${data.student_name} (${data.student_roll})</div>
@@ -481,7 +494,7 @@ function submitVoucher(studentId, schema, isEdit) {
             alert('Error: ' + data.error);
         } else {
             alert(data.message || 'Fee voucher generated/updated successfully.');
-            // Reload status and show voucher
+            // Reload status and show voucher (footer will appear)
             loadVoucherStatus(studentId, schema);
         }
     })
@@ -510,18 +523,16 @@ def patch_file(filepath, new_content):
 
 def main():
     print("=" * 60)
-    print("🎨 AXIS VOUCHER – PREMIUM FORM UI FIX")
+    print("🔘 AXIS VOUCHER – HIDE BUTTONS ON FORM")
     print("=" * 60)
 
-    # Only update voucher_modal.html (form styles are inside it)
     patch_file("templates/tenant/voucher_modal.html", NEW_VOUCHER_MODAL)
 
-    print("\n🎉 Voucher form UI fixed successfully!")
-    print("   ✅ Premium form styling – clean, spacious, icons.")
-    print("   ✅ Extra charges section with add/remove.")
-    print("   ✅ Checkbox for default charges.")
-    print("   ✅ Buttons with icons and professional colors.")
-    print("   ✅ Responsive for mobile.")
+    print("\n🎉 Buttons toggle fixed!")
+    print("   ✅ Print, Save, Edit now appear only when voucher is shown.")
+    print("   ✅ Form view hides the footer buttons.")
+    print("   ✅ Edit button click shows form and hides footer.")
+    print("   ✅ After generation, voucher reloads and footer reappears.")
     print("\n🔄 Restart your server to see the changes.")
     print("   Railway: deploy new release or restart service.")
     print("=" * 60)

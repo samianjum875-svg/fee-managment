@@ -7,8 +7,8 @@
         <div id="voucherModalBody">
             <!-- Content loaded via JS -->
         </div>
-        <!-- Action Buttons -->
-        <div class="modal-footer">
+        <!-- Action Buttons (visible only when voucher is shown) -->
+        <div class="modal-footer" id="modalFooter">
             <button class="btn-action" id="printVoucherBtn">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><path d="M6 9V3h12v6"/><rect x="6" y="15" width="12" height="6" rx="2"/></svg>
                 Print
@@ -244,7 +244,7 @@
 </style>
 
 <script>
-// Voucher JS – direct buttons, no dropdown
+// Voucher JS – direct buttons, no dropdown, with footer toggle
 function getCsrfToken() {
     let name = 'csrftoken';
     let cookieValue = null;
@@ -280,6 +280,9 @@ function closeVoucherModal() {
 function loadVoucherStatus(studentId, schema) {
     const body = document.getElementById('voucherModalBody');
     body.innerHTML = '<p style="text-align:center; padding:1rem; color:#6b7280;">Loading...</p>';
+    // Hide footer while loading
+    const footer = document.getElementById('modalFooter');
+    if (footer) footer.style.display = 'none';
     fetch(`/portal/${schema}/api/student/${studentId}/voucher-status/`)
         .then(res => res.json())
         .then(data => {
@@ -292,6 +295,8 @@ function loadVoucherStatus(studentId, schema) {
                 // Already paid – show voucher only
                 showVoucher(data, schema, studentId);
                 document.getElementById('editVoucherBtn').style.display = 'none';
+                // Show footer (voucher view)
+                if (footer) footer.style.display = 'flex';
             } else if (data.exists && data.fee_record.paid_amount === 0) {
                 // Unpaid – show voucher + edit
                 showVoucher(data, schema, studentId);
@@ -299,10 +304,12 @@ function loadVoucherStatus(studentId, schema) {
                 document.getElementById('editVoucherBtn').onclick = function() {
                     showVoucherForm(data, true);
                 };
+                if (footer) footer.style.display = 'flex';
             } else {
-                // No fee – show form
+                // No fee – show form (footer hidden)
                 showVoucherForm(data, false);
                 document.getElementById('editVoucherBtn').style.display = 'none';
+                if (footer) footer.style.display = 'none';
             }
         })
         .catch(err => {
@@ -312,10 +319,13 @@ function loadVoucherStatus(studentId, schema) {
 
 function showVoucher(data, schema, studentId) {
     const body = document.getElementById('voucherModalBody');
+    const footer = document.getElementById('modalFooter');
     fetch(`/portal/${schema}/api/student/${studentId}/voucher-html/`)
         .then(res => res.text())
         .then(html => {
             body.innerHTML = html;
+            // Show footer (voucher view)
+            if (footer) footer.style.display = 'flex';
             // Attach print and download actions
             document.getElementById('printVoucherBtn').onclick = function() {
                 const content = document.querySelector('.voucher-receipt');
@@ -357,6 +367,10 @@ function downloadVoucherImage(element) {
 
 function showVoucherForm(data, isEdit) {
     const body = document.getElementById('voucherModalBody');
+    // Hide footer (form view)
+    const footer = document.getElementById('modalFooter');
+    if (footer) footer.style.display = 'none';
+
     let html = '<div class="voucher-form">';
     html += `<div style="display:grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom:1rem; font-size:0.9rem; background:#f9fafb; padding:0.5rem 0.75rem; border-radius:0.5rem; border:1px solid #e5e7eb;">
                 <div><strong>Student:</strong> ${data.student_name} (${data.student_roll})</div>
@@ -471,7 +485,7 @@ function submitVoucher(studentId, schema, isEdit) {
             alert('Error: ' + data.error);
         } else {
             alert(data.message || 'Fee voucher generated/updated successfully.');
-            // Reload status and show voucher
+            // Reload status and show voucher (footer will appear)
             loadVoucherStatus(studentId, schema);
         }
     })
